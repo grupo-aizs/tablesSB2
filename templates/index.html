@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sync SB2010</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --card: #111a2e;
+      --muted: #9fb0d0;
+      --text: #eaf0ff;
+      --line: rgba(255, 255, 255, .10);
+      --brand: #4aa3ff;
+      --ok: #2de38b;
+      --warn: #ffcc66;
+      --danger: #ff4d4d;
+    }
+
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background: radial-gradient(1200px 600px at 20% 0%, rgba(74, 163, 255, .18), transparent 60%),
+        radial-gradient(1000px 500px at 90% 20%, rgba(45, 227, 139, .12), transparent 60%),
+        var(--bg);
+      color: var(--text);
+    }
+
+    .wrap {
+      max-width: 1100px;
+      margin: 22px auto;
+      padding: 0 14px;
+    }
+
+    .topbar {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .03));
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, .35);
+      position: sticky;
+      top: 10px;
+      z-index: 20;
+      backdrop-filter: blur(10px);
+    }
+
+    .ctrls-group {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .pagination-ctrls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .page-info {
+      font-size: 13px;
+      color: var(--muted);
+      margin: 0 8px;
+    }
+
+    select {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--line);
+      color: var(--text);
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-family: inherit;
+      outline: none;
+      cursor: pointer;
+    }
+
+    select:focus {
+      border-color: var(--brand);
+    }
+
+    .title {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .title h1 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: .2px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255, 255, 255, .06);
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    button {
+      padding: 6px 12px;
+      border: 1px solid rgba(255, 255, 255, .16);
+      background: linear-gradient(180deg, rgba(74, 163, 255, .35), rgba(74, 163, 255, .18));
+      color: var(--text);
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    button:hover {
+      background: rgba(74, 163, 255, .4);
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    button:disabled {
+      opacity: .4;
+      cursor: not-allowed;
+    }
+
+    .table-card {
+      margin-top: 14px;
+      background: rgba(255, 255, 255, .04);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, .35);
+    }
+
+    .table-wrap {
+      max-height: 68vh;
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    thead th {
+      position: sticky;
+      background: #111a2e;
+      z-index: 10;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      padding: 12px 10px;
+      color: var(--text);
+      font-weight: 800;
+      letter-spacing: .3px;
+    }
+
+    thead tr:nth-child(1) th {
+      top: 0;
+    }
+
+    thead tr:nth-child(2) th {
+      top: 45px;
+    }
+
+    tbody td {
+      padding: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, .06);
+      color: rgba(234, 240, 255, .92);
+    }
+
+    tbody tr:nth-child(odd) {
+      background: rgba(255, 255, 255, .02);
+    }
+
+    tbody tr:hover {
+      background: rgba(74, 163, 255, .10);
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    .right {
+      text-align: right;
+    }
+
+    /* Stronger Divergence Colors */
+    .diff {
+      color: #ff4d4d !important;
+      font-weight: 800;
+      text-shadow: 0 0 10px rgba(255, 77, 77, 0.4);
+    }
+
+    .match {
+      color: #2de38b;
+      opacity: 0.6;
+    }
+
+    .row-diff {
+      background: rgba(255, 77, 77, 0.15) !important;
+      /* Stronger red bg */
+      border-left: 3px solid #ff4d4d;
+    }
+
+    .row-diff:hover {
+      background: rgba(255, 77, 77, 0.25) !important;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap" style="max-width: 1400px;">
+    <div class="topbar">
+      <div class="title">
+        <h1>Comparação SB2010</h1>
+        <div class="subtitle">
+          <span class="mono">{{ filial }}</span>
+          <span style="margin-left:8px; opacity:0.6;">Atualizado às: {{ last_update }}</span>
+        </div>
+      </div>
+
+      <div class="ctrls-group">
+        <!-- Refresh -->
+        <button onclick="forceReload()" title="Recarregar Dados do SQL">🔄 Recarregar</button>
+
+        <!-- Export -->
+        <button onclick="window.location.href='/export_excel'" title="Baixar Excel Completo">📊 Excel</button>
+
+        <!-- Filter Dropdown -->
+        <select id="filterSelect" onchange="changeFilter(this.value)">
+          <option value="all" {% if current_filter=='all' %}selected{% endif %}>Mostrar Tudo</option>
+          <option value="diff" {% if current_filter=='diff' %}selected{% endif %}>⚠️ Apenas Divergentes</option>
+          <option value="equal" {% if current_filter=='equal' %}selected{% endif %}>✅ Apenas Iguais</option>
+        </select>
+
+        <!-- Pagination -->
+        <div class="pagination-ctrls">
+          <button onclick="changePage({{ page - 1 }})" {% if page <=1 %}disabled{% endif %}>Anterior</button>
+          <span class="page-info">Pág <b>{{ page }}</b> de <b>{{ total_pages }}</b></span>
+          <button onclick="changePage({{ page + 1 }})" {% if page>= total_pages %}disabled{% endif %}>Próxima</button>
+        </div>
+      </div>
+
+      <div class="badges">
+        <span class="badge">Visualizando {{ total_items }} de {{ total_full }}</span>
+      </div>
+    </div>
+
+    <!-- Tabela Unificada -->
+    <div class="table-card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th rowspan="2" style="width:100px;">FILIAL</th>
+              <th rowspan="2" style="width:160px;">PRODUTO</th>
+              <th rowspan="2" style="width:80px;">LOCAL</th>
+
+              <!-- Grupo Teste -->
+              <th colspan="2" style="text-align:center; border-left:1px solid #4aa3ff; color:#4aa3ff;">
+                TESTE
+              </th>
+
+              <!-- Grupo Produção -->
+              <th colspan="2" style="text-align:center; border-left:1px solid #ffcc66; color:#ffcc66;">
+                PRODUÇÃO
+              </th>
+            </tr>
+            <tr>
+              <!-- Sub Headers Teste -->
+              <th class="right" style="border-left:1px solid rgba(74,163,255,.3);">B2_VATU1</th>
+              <th class="right">B2_CM1</th>
+
+              <!-- Sub Headers Prod -->
+              <th class="right" style="border-left:1px solid rgba(255,204,102,.3);">B2_VATU1</th>
+              <th class="right">B2_CM1</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in comparison_data %}
+            <tr class="{% if item.has_diff %}row-diff{% endif %}">
+              <td class="mono">{{ item.filial }}</td>
+              <td class="mono">{{ item.cod }}</td>
+              <td class="mono">{{ item.local }}</td>
+
+              <!-- Val Teste -->
+              <td class="right" style="border-left:1px solid rgba(74,163,255,.1); color:#bae0ff;">
+                {{ item.t_vatu }}
+              </td>
+              <td class="right" style="color:#bae0ff;">
+                {{ item.t_cm }}
+              </td>
+
+              <!-- Val Prod -->
+              <td class="right {% if item.diff_vatu %}diff{% else %}match{% endif %}"
+                style="border-left:1px solid rgba(255,204,102,.1);">
+                {{ item.p_vatu }}
+              </td>
+              <td class="right {% if item.diff_cm %}diff{% else %}match{% endif %}">
+                {{ item.p_cm }}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Helper to get current params
+    function getParams() {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams;
+    }
+
+    function changePage(p) {
+      if (p < 1) return;
+      const params = getParams();
+      params.set('page', p);
+      window.location.href = `/?${params.toString()}`;
+    }
+
+    function changeFilter(val) {
+      const params = getParams();
+      params.set('filter', val);
+      params.set('page', 1); // Reset page on filter change
+      window.location.href = `/?${params.toString()}`;
+    }
+
+    function forceReload() {
+      const params = getParams();
+      params.set('reload', '1');
+      window.location.href = `/?${params.toString()}`;
+    }
+  </script>
+</body>
+
+</html>
