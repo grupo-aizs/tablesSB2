@@ -255,6 +255,8 @@ def get_produtos_prod():
 
 # Endpoint sync removido para este modo de comparação
 
+from openpyxl.cell import WriteOnlyCell
+
 @app.route("/export_excel")
 def export_excel():
     # 1. Obter dados (garante que está carregado)
@@ -262,31 +264,44 @@ def export_excel():
     if not data:
         data = []
 
-    # 2. Criar Workbook
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Comparacao SB2"
+    # 2. Criar Workbook OTIMIZADO (WriteOnly) - Crucial para grandes volumes (170k+ linhas)
+    # reduz drasticamente o consumo de RAM e evita timeouts
+    wb = Workbook(write_only=True)
+    ws = wb.create_sheet("Comparacao SB2")
+
+    # Configurar Larguras (Tentativa, nem sempre funciona perfeito em write_only, mas ajuda)
+    ws.column_dimensions['A'].width = 10
+    ws.column_dimensions['B'].width = 20
+    ws.column_dimensions['C'].width = 10
+    ws.column_dimensions['D'].width = 15
+    ws.column_dimensions['E'].width = 15
+    ws.column_dimensions['F'].width = 15
+    ws.column_dimensions['G'].width = 15
 
     # Estilos
     header_font = Font(bold=True, color="FFFFFF")
     header_fill = PatternFill(start_color="0b1220", end_color="0b1220", fill_type="solid")
     
-    diff_font = Font(bold=True, color="FF0000") # Vermelho para divergência
-    normal_font = Font(color="000000")
+    diff_font = Font(bold=True, color="FF0000") 
 
     # 3. Cabeçalhos
     headers = ["FILIAL", "PRODUTO", "LOCAL", "TESTE_VATU1", "TESTE_CM1", "PROD_VATU1", "PROD_CM1"]
-    ws.append(headers)
-
-    # Formatar Cabeçalho
-    for cell in ws[1]:
+    
+    header_row = []
+    for h in headers:
+        cell = WriteOnlyCell(ws, value=h)
         cell.font = header_font
         cell.fill = header_fill
         cell.alignment = Alignment(horizontal='center')
+        header_row.append(cell)
+    
+    ws.append(header_row)
 
-    # 4. Preencher Dados
-    for row_idx, item in enumerate(data, start=2):
-        # Converter de volta para float para o Excel reconhecer como número
+    # 4. Loop Otimizado
+    num_fmt = '0.000000'
+
+    for item in data:
+        # Converter de volta para float
         try:
             t_vatu = float(item['t_vatu'])
             t_cm = float(item['t_cm'])
@@ -295,47 +310,28 @@ def export_excel():
         except:
             t_vatu = t_cm = p_vatu = p_cm = 0.0
 
-        filial = item['filial']
-        cod = item['cod']
-        local = item['local']
-
-        # Escreve linha
-        ws.cell(row=row_idx, column=1, value=filial)
-        ws.cell(row=row_idx, column=2, value=cod)
-        ws.cell(row=row_idx, column=3, value=local)
+        # Criação de células otimizada
+        c_filial = WriteOnlyCell(ws, value=item['filial'])
+        c_cod    = WriteOnlyCell(ws, value=item['cod'])
+        c_local  = WriteOnlyCell(ws, value=item['local'])
         
-        c4 = ws.cell(row=row_idx, column=4, value=t_vatu)
-        c5 = ws.cell(row=row_idx, column=5, value=t_cm)
-        c6 = ws.cell(row=row_idx, column=6, value=p_vatu)
-        c7 = ws.cell(row=row_idx, column=7, value=p_cm)
-
-        # Formatação numérica
-        num_fmt = '0.000000'
-        c4.number_format = num_fmt
-        c5.number_format = num_fmt
-        c6.number_format = num_fmt
-        c7.number_format = num_fmt
-
-        # Destaque de Divergências (sempre comparando com o estilo visual)
-        # Se houver diff, pintamos o valor de Produção de vermelho (igual ao site)
+        c_t_vatu = WriteOnlyCell(ws, value=t_vatu)
+        c_t_vatu.number_format = num_fmt
         
-        # Teste VATU (Padrão Azul claro no site, aqui deixamos normal)
-        # Prod VATU (Se diff -> Red)
+        c_t_cm   = WriteOnlyCell(ws, value=t_cm)
+        c_t_cm.number_format = num_fmt
+        
+        c_p_vatu = WriteOnlyCell(ws, value=p_vatu)
+        c_p_vatu.number_format = num_fmt
         if item['diff_vatu']:
-            c6.font = diff_font
-        
-        # Prod CM (Se diff -> Red)
+            c_p_vatu.font = diff_font
+            
+        c_p_cm   = WriteOnlyCell(ws, value=p_cm)
+        c_p_cm.number_format = num_fmt
         if item['diff_cm']:
-            c7.font = diff_font
-
-    # Ajuste largura colunas
-    ws.column_dimensions['A'].width = 10
-    ws.column_dimensions['B'].width = 20
-    ws.column_dimensions['C'].width = 10
-    ws.column_dimensions['D'].width = 15
-    ws.column_dimensions['E'].width = 15
-    ws.column_dimensions['F'].width = 15
-    ws.column_dimensions['G'].width = 15
+            c_p_cm.font = diff_font
+            
+        ws.append([c_filial, c_cod, c_local, c_t_vatu, c_t_cm, c_p_vatu, c_p_cm])
 
     # 5. Salvar em memória
     out = io.BytesIO()
