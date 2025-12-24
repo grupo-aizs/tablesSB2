@@ -73,6 +73,8 @@ def get_produtos_teste():
          AND D_E_L_E_T_ = ''
          AND B2_COD <> ''
          AND (B2_VATU1 <> 0 OR B2_CM1 <> 0)
+         AND B2_DMOV >= '20240101'
+         AND B2_DMOV <= '20241231'
          ORDER BY B2_COD, B2_LOCAL
     """
     with connect_sql(TESTE_SQL) as conn:
@@ -269,6 +271,8 @@ def get_produtos_prod():
          -- mas se o produto existir e estiver zerado, 
          -- cairá no 'else' do loop acima assumindo 0.0, o que está ok.
          AND (B2_VATU1 <> 0 OR B2_CM1 <> 0)
+         AND B2_DMOV >= '20240101'
+         AND B2_DMOV <= '20241231'
          ORDER BY B2_COD, B2_LOCAL
     """
     with connect_sql(PROD_SQL) as conn:
