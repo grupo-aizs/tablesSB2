@@ -257,94 +257,76 @@ def get_produtos_prod():
 
 from openpyxl.cell import WriteOnlyCell
 
+import csv
+from flask import Response, stream_with_context
+
 @app.route("/export_excel")
 def export_excel():
-    # 1. Obter dados (garante que está carregado)
+    # 1. Obter dados
     data = get_cached_data() 
     if not data:
         data = []
 
-    # 2. Criar Workbook OTIMIZADO (WriteOnly) - Crucial para grandes volumes (170k+ linhas)
-    # reduz drasticamente o consumo de RAM e evita timeouts
-    wb = Workbook(write_only=True)
-    ws = wb.create_sheet("Comparacao SB2")
-
-    # Configurar Larguras (Tentativa, nem sempre funciona perfeito em write_only, mas ajuda)
-    ws.column_dimensions['A'].width = 10
-    ws.column_dimensions['B'].width = 20
-    ws.column_dimensions['C'].width = 10
-    ws.column_dimensions['D'].width = 15
-    ws.column_dimensions['E'].width = 15
-    ws.column_dimensions['F'].width = 15
-    ws.column_dimensions['G'].width = 15
-
-    # Estilos
-    header_font = Font(bold=True, color="FFFFFF")
-    header_fill = PatternFill(start_color="0b1220", end_color="0b1220", fill_type="solid")
-    
-    diff_font = Font(bold=True, color="FF0000") 
-
-    # 3. Cabeçalhos
-    headers = ["FILIAL", "PRODUTO", "LOCAL", "TESTE_VATU1", "TESTE_CM1", "PROD_VATU1", "PROD_CM1"]
-    
-    header_row = []
-    for h in headers:
-        cell = WriteOnlyCell(ws, value=h)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = Alignment(horizontal='center')
-        header_row.append(cell)
-    
-    ws.append(header_row)
-
-    # 4. Loop Otimizado
-    num_fmt = '0.000000'
-
-    for item in data:
-        # Converter de volta para float
-        try:
-            t_vatu = float(item['t_vatu'])
-            t_cm = float(item['t_cm'])
-            p_vatu = float(item['p_vatu'])
-            p_cm = float(item['p_cm'])
-        except:
-            t_vatu = t_cm = p_vatu = p_cm = 0.0
-
-        # Criação de células otimizada
-        c_filial = WriteOnlyCell(ws, value=item['filial'])
-        c_cod    = WriteOnlyCell(ws, value=item['cod'])
-        c_local  = WriteOnlyCell(ws, value=item['local'])
+    # 2. Gerador para Streaming (Baixa instantaneamente e não trava o servidor)
+    def generate():
+        # BOM para Excel reconhecer acentos
+        yield '\ufeff' 
         
-        c_t_vatu = WriteOnlyCell(ws, value=t_vatu)
-        c_t_vatu.number_format = num_fmt
+        # Cria um buffer de string em memória para o CSV writer
+        output = io.StringIO()
+        writer = csv.writer(output, delimiter=';', quoting=csv.QUOTE_MINIMAL)
+
+        # Cabeçalhos
+        headers = ["FILIAL", "PRODUTO", "LOCAL", "TESTE_VATU1", "TESTE_CM1", "PROD_VATU1", "PROD_CM1", "DIVERGENCIA"]
+        writer.writerow(headers)
         
-        c_t_cm   = WriteOnlyCell(ws, value=t_cm)
-        c_t_cm.number_format = num_fmt
-        
-        c_p_vatu = WriteOnlyCell(ws, value=p_vatu)
-        c_p_vatu.number_format = num_fmt
-        if item['diff_vatu']:
-            c_p_vatu.font = diff_font
+        # Envia headers
+        yield output.getvalue()
+        output.seek(0)
+        output.truncate(0)
+
+        # Dados
+        for item in data:
+            # Converter float
+            try:
+                t_vatu = float(item['t_vatu'])
+                t_cm = float(item['t_cm'])
+                p_vatu = float(item['p_vatu'])
+                p_cm = float(item['p_cm'])
+            except:
+                t_vatu = t_cm = p_vatu = p_cm = 0.0
+
+            # Formata floats com virgula para Excel PT-BR
+            def fmt(v):
+                return f"{v:.6f}".replace('.', ',')
+
+            # Checa divergência
+            # (Adicionamos uma coluna explícita já que CSV não tem cor)
+            div_text = "SIM" if (item['diff_vatu'] or item['diff_cm']) else "NAO"
+
+            writer.writerow([
+                item['filial'],
+                item['cod'],
+                item['local'],
+                fmt(t_vatu),
+                fmt(t_cm),
+                fmt(p_vatu),
+                fmt(p_cm),
+                div_text
+            ])
             
-        c_p_cm   = WriteOnlyCell(ws, value=p_cm)
-        c_p_cm.number_format = num_fmt
-        if item['diff_cm']:
-            c_p_cm.font = diff_font
-            
-        ws.append([c_filial, c_cod, c_local, c_t_vatu, c_t_cm, c_p_vatu, c_p_cm])
+            # Envia o chunk processado
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
 
-    # 5. Salvar em memória
-    out = io.BytesIO()
-    wb.save(out)
-    out.seek(0)
-
-    filename = f"comparacao_sb2_{time.strftime('%Y%m%d_%H%M')}.xlsx"
-
-    return send_file(
-        out,
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        as_attachment=True,
-        download_name=filename
+    # 3. Retorna resposta Streamada
+    filename = f"comparacao_sb2_{time.strftime('%Y%m%d_%H%M')}.csv"
+    
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
 if __name__ == "__main__":
