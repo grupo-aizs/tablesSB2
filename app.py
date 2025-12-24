@@ -188,6 +188,13 @@ def get_cached_data(force_reload=False):
     CACHE_TIMESTAMP = time.strftime("%H:%M:%S")
     return full_data
 
+def apply_filter(data, filter_type):
+    if filter_type == 'diff':
+        return [item for item in data if item['has_diff']]
+    elif filter_type == 'equal':
+        return [item for item in data if not item['has_diff']]
+    return data
+
 @app.route("/")
 def index():
     page = request.args.get('page', 1, type=int)
@@ -198,13 +205,16 @@ def index():
     # Pega dados do cache (ou carrega se necessário/forçado)
     full_data = get_cached_data(force_reload=force_reload)
     
-    # Aplica filtros na lista em memória (muito rápido)
-    if filter_type == 'diff':
-        filtered_data = [item for item in full_data if item['has_diff']]
-    elif filter_type == 'equal':
-        filtered_data = [item for item in full_data if not item['has_diff']]
-    else:
-        filtered_data = full_data
+    # Aplica filtros helper
+    filtered_data = apply_filter(full_data, filter_type)
+
+    # Calculo de Totais (Baseado no filtro atual)
+    totals = {
+        't_vatu': sum(float(item['t_vatu']) for item in filtered_data),
+        't_cm': sum(float(item['t_cm']) for item in filtered_data),
+        'p_vatu': sum(float(item['p_vatu']) for item in filtered_data),
+        'p_cm': sum(float(item['p_cm']) for item in filtered_data),
+    }
 
     # Paginação
     total_items = len(filtered_data)
@@ -227,6 +237,7 @@ def index():
         # Stats
         total_items=total_items, # Total filtrado
         total_full=len(full_data), # Total absoluto
+        totals=totals, # Somas
         
         # Pagination & Filter
         page=page,
@@ -261,10 +272,14 @@ import xlsxwriter
 
 @app.route("/export_excel")
 def export_excel():
-    # 1. Obter dados
+    # 0. Obter dados e filtro
+    filter_type = request.args.get('filter', 'all')
     data = get_cached_data() 
     if not data:
         data = []
+    
+    # 1. Aplicar o MEIO FILTRO que está na tela
+    data = apply_filter(data, filter_type)
 
     # 2. Configurar XlsxWriter com Constant Memory (Baixo uso de RAM)
     output = io.BytesIO()
@@ -279,6 +294,13 @@ def export_excel():
         'align': 'center'
     })
     
+    total_fmt = workbook.add_format({
+        'bold': True,
+        'bg_color': '#e1e1e1',
+        'num_format': '0.000000',
+        'top': 1
+    })
+
     diff_fmt = workbook.add_format({'bold': True, 'font_color': '#FF0000', 'num_format': '0.000000'})
     normal_fmt = workbook.add_format({'num_format': '0.000000'})
     text_fmt = workbook.add_format({})
@@ -294,8 +316,16 @@ def export_excel():
     worksheet.set_column(2, 2, 10) # Local
     worksheet.set_column(3, 6, 15) # Valores
 
+    # Acumuladores de Totais
+    sum_t_vatu = 0.0
+    sum_t_cm = 0.0
+    sum_p_vatu = 0.0
+    sum_p_cm = 0.0
+
     # 4. Loop de Dados
-    for row_idx, item in enumerate(data, start=1):
+    row_idx = 0
+    for i, item in enumerate(data, start=1):
+        row_idx = i
         # Conversões
         try:
             t_vatu = float(item['t_vatu'])
@@ -304,6 +334,12 @@ def export_excel():
             p_cm = float(item['p_cm'])
         except:
             t_vatu = t_cm = p_vatu = p_cm = 0.0
+        
+        # Soma
+        sum_t_vatu += t_vatu
+        sum_t_cm += t_cm
+        sum_p_vatu += p_vatu
+        sum_p_cm += p_cm
 
         # Escrever células
         worksheet.write(row_idx, 0, item['filial'], text_fmt)
@@ -320,11 +356,24 @@ def export_excel():
         worksheet.write(row_idx, 5, p_vatu, fmt_vatu)
         worksheet.write(row_idx, 6, p_cm, fmt_cm)
 
-    # 5. Fechar e Enviar
+    # 5. Escrever Totais na última linha
+    last_row = row_idx + 1
+    worksheet.write(last_row, 0, "TOTAL GERAL", total_fmt)
+    # Mesclar ou deixar vazio as colunas B e C
+    worksheet.write(last_row, 1, "", total_fmt)
+    worksheet.write(last_row, 2, "", total_fmt)
+    
+    worksheet.write(last_row, 3, sum_t_vatu, total_fmt)
+    worksheet.write(last_row, 4, sum_t_cm, total_fmt)
+    worksheet.write(last_row, 5, sum_p_vatu, total_fmt)
+    worksheet.write(last_row, 6, sum_p_cm, total_fmt)
+
+    # 6. Fechar e Enviar
     workbook.close()
     output.seek(0)
-
-    filename = f"comparacao_sb2_{time.strftime('%Y%m%d_%H%M')}.xlsx"
+    
+    filter_label = f"_{filter_type}" if filter_type != 'all' else ""
+    filename = f"comparacao_sb2{filter_label}_{time.strftime('%Y%m%d_%H%M')}.xlsx"
 
     return send_file(
         output,
