@@ -257,8 +257,7 @@ def get_produtos_prod():
 
 from openpyxl.cell import WriteOnlyCell
 
-import csv
-from flask import Response, stream_with_context
+import xlsxwriter
 
 @app.route("/export_excel")
 def export_excel():
@@ -267,66 +266,71 @@ def export_excel():
     if not data:
         data = []
 
-    # 2. Gerador para Streaming (Baixa instantaneamente e não trava o servidor)
-    def generate():
-        # BOM para Excel reconhecer acentos
-        yield '\ufeff' 
-        
-        # Cria um buffer de string em memória para o CSV writer
-        output = io.StringIO()
-        writer = csv.writer(output, delimiter=';', quoting=csv.QUOTE_MINIMAL)
+    # 2. Configurar XlsxWriter com Constant Memory (Baixo uso de RAM)
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output, {'constant_memory': True, 'in_memory': False})
+    worksheet = workbook.add_worksheet("Comparacao SB2")
 
-        # Cabeçalhos
-        headers = ["FILIAL", "PRODUTO", "LOCAL", "TESTE_VATU1", "TESTE_CM1", "PROD_VATU1", "PROD_CM1", "DIVERGENCIA"]
-        writer.writerow(headers)
-        
-        # Envia headers
-        yield output.getvalue()
-        output.seek(0)
-        output.truncate(0)
-
-        # Dados
-        for item in data:
-            # Converter float
-            try:
-                t_vatu = float(item['t_vatu'])
-                t_cm = float(item['t_cm'])
-                p_vatu = float(item['p_vatu'])
-                p_cm = float(item['p_cm'])
-            except:
-                t_vatu = t_cm = p_vatu = p_cm = 0.0
-
-            # Formata floats com virgula para Excel PT-BR
-            def fmt(v):
-                return f"{v:.6f}".replace('.', ',')
-
-            # Checa divergência
-            # (Adicionamos uma coluna explícita já que CSV não tem cor)
-            div_text = "SIM" if (item['diff_vatu'] or item['diff_cm']) else "NAO"
-
-            writer.writerow([
-                item['filial'],
-                item['cod'],
-                item['local'],
-                fmt(t_vatu),
-                fmt(t_cm),
-                fmt(p_vatu),
-                fmt(p_cm),
-                div_text
-            ])
-            
-            # Envia o chunk processado
-            yield output.getvalue()
-            output.seek(0)
-            output.truncate(0)
-
-    # 3. Retorna resposta Streamada
-    filename = f"comparacao_sb2_{time.strftime('%Y%m%d_%H%M')}.csv"
+    # Estilos
+    header_fmt = workbook.add_format({
+        'bold': True,
+        'font_color': '#FFFFFF',
+        'bg_color': '#0B1220',
+        'align': 'center'
+    })
     
-    return Response(
-        stream_with_context(generate()),
-        mimetype="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    diff_fmt = workbook.add_format({'bold': True, 'font_color': '#FF0000', 'num_format': '0.000000'})
+    normal_fmt = workbook.add_format({'num_format': '0.000000'})
+    text_fmt = workbook.add_format({})
+
+    # 3. Cabeçalhos
+    headers = ["FILIAL", "PRODUTO", "LOCAL", "TESTE_VATU1", "TESTE_CM1", "PROD_VATU1", "PROD_CM1"]
+    for col, h in enumerate(headers):
+        worksheet.write(0, col, h, header_fmt)
+
+    # Ajuste largura colunas (aprox)
+    worksheet.set_column(0, 0, 10) # Filial
+    worksheet.set_column(1, 1, 20) # Produto
+    worksheet.set_column(2, 2, 10) # Local
+    worksheet.set_column(3, 6, 15) # Valores
+
+    # 4. Loop de Dados
+    for row_idx, item in enumerate(data, start=1):
+        # Conversões
+        try:
+            t_vatu = float(item['t_vatu'])
+            t_cm = float(item['t_cm'])
+            p_vatu = float(item['p_vatu'])
+            p_cm = float(item['p_cm'])
+        except:
+            t_vatu = t_cm = p_vatu = p_cm = 0.0
+
+        # Escrever células
+        worksheet.write(row_idx, 0, item['filial'], text_fmt)
+        worksheet.write(row_idx, 1, item['cod'], text_fmt)
+        worksheet.write(row_idx, 2, item['local'], text_fmt)
+        
+        worksheet.write(row_idx, 3, t_vatu, normal_fmt)
+        worksheet.write(row_idx, 4, t_cm, normal_fmt)
+        
+        # Formatação Condicional na Linha
+        fmt_vatu = diff_fmt if item['diff_vatu'] else normal_fmt
+        fmt_cm = diff_fmt if item['diff_cm'] else normal_fmt
+        
+        worksheet.write(row_idx, 5, p_vatu, fmt_vatu)
+        worksheet.write(row_idx, 6, p_cm, fmt_cm)
+
+    # 5. Fechar e Enviar
+    workbook.close()
+    output.seek(0)
+
+    filename = f"comparacao_sb2_{time.strftime('%Y%m%d_%H%M')}.xlsx"
+
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename
     )
 
 if __name__ == "__main__":
