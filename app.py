@@ -9,7 +9,10 @@ from flask import send_file
 
 app = Flask(__name__)
 
-FILIAL = "09ALFA01"
+# Lista de filiais a considerar
+FILIAIS = ["09ALFA01", "09ALFA07"]
+# String para display (ou log)
+FILIAIS_STR = ", ".join(FILIAIS)
 
 TESTE_SQL = {
     "server": os.environ.get("MSSQL_HOST_TST", "192.168.0.246"),
@@ -66,24 +69,28 @@ def _trim(v):
     return v.rstrip() if isinstance(v, str) else v
 
 def get_produtos_teste():
-    sql = """
-        SELECT B2_FILIAL, B2_COD, B2_LOCAL, B2_VATU1, B2_CM1
+    # Monta placeholders ?, ?
+    placeholders = ",".join("?" * len(FILIAIS))
+    
+    sql = f"""
+        SELECT B2_FILIAL, B2_COD, B2_LOCAL, B2_VATU1, B2_CM1, B2_QATU, B2_DMOV
           FROM SB2010
-         WHERE B2_FILIAL = ?
+         WHERE B2_FILIAL IN ({placeholders})
          AND D_E_L_E_T_ = ''
          AND B2_COD <> ''
-         AND (B2_VATU1 <> 0 OR B2_CM1 <> 0)
-         AND B2_DMOV >= '20240101'
-         AND B2_DMOV <= '20241231'
-         ORDER BY B2_COD, B2_LOCAL
+         AND (
+             B2_VATU1 <> 0 
+             OR B2_CM1 <> 0 
+         )
+         ORDER BY B2_FILIAL, B2_COD, B2_LOCAL
     """
     with connect_sql(TESTE_SQL) as conn:
         cur = conn.cursor()
-        cur.execute(sql, (FILIAL,))
+        cur.execute(sql, tuple(FILIAIS))
         rows = cur.fetchall()
 
-        # [(filial, cod, local, vatu1, cm1), ...]
-        return [(_trim(r.B2_FILIAL), _trim(r.B2_COD), _trim(r.B2_LOCAL), r.B2_VATU1, r.B2_CM1) for r in rows]
+        # [(filial, cod, local, vatu1, cm1, qatu, dmov), ...]
+        return [(_trim(r.B2_FILIAL), _trim(r.B2_COD), _trim(r.B2_LOCAL), r.B2_VATU1, r.B2_CM1, r.B2_QATU, _trim(r.B2_DMOV)) for r in rows]
 
 def sync_to_prod(produtos):
     # Atualiza só se existir e só se mudou
@@ -121,7 +128,8 @@ def sync_to_prod(produtos):
             cod_key = _trim(cod)
 
             # sanity: por segurança, não deixa sincronizar outra filial sem querer
-            if filial_key != FILIAL:
+            # sanity: por segurança, não deixa sincronizar outra filial sem querer
+            if filial_key not in FILIAIS:
                 continue
 
             cur.execute(sql_exists, (filial_key, cod_key))
@@ -162,27 +170,40 @@ def get_cached_data(force_reload=False):
     # 1. Busca dados
     test_data = get_produtos_teste()
     raw_prod = get_produtos_prod()
-    prod_dict = {(r[1], r[2]): (r[3], r[4]) for r in raw_prod}
+    # Chave agora inclui FILIAL para não misturar produtos iguais de filiais dif
+    # Dict Key: (Filial, Cod, Local)
+    prod_dict = {(r[0], r[1], r[2]): (r[3], r[4], r[5], r[6]) for r in raw_prod}
     
     # 2. Processa em memória
     full_data = []
-    for t_filial, t_cod, t_local, t_vatu, t_cm in test_data:
-        p_val = prod_dict.get((t_cod, t_local))
+    for t_filial, t_cod, t_local, t_vatu, t_cm, t_qatu, t_dmov in test_data:
+        p_val = prod_dict.get((t_filial, t_cod, t_local))
         
         if p_val:
-            p_vatu, p_cm = p_val
+            p_vatu, p_cm, p_qatu, p_dmov = p_val
         else:
-            p_vatu, p_cm = 0.0, 0.0
+            p_vatu, p_cm, p_qatu, p_dmov = 0.0, 0.0, 0.0, ""
             
         t_vatu_f = round(float(t_vatu) if t_vatu else 0.0, 2)
         p_vatu_f = round(float(p_vatu) if p_vatu else 0.0, 2)
         t_cm_f = round(float(t_cm) if t_cm else 0.0, 2)
         p_cm_f = round(float(p_cm) if p_cm else 0.0, 2)
+        
+        # Quantidade (B2_QATU)
+        t_qatu_f = round(float(t_qatu) if t_qatu else 0.0, 2)
+        p_qatu_f = round(float(p_qatu) if p_qatu else 0.0, 2)
 
         # Agora a comparação pode ser exata (ou com epsilon muito baixo),
         # pois já arredondamos para o que é visível.
         diff_vatu = abs(t_vatu_f - p_vatu_f) > 0.000001
         diff_cm = abs(t_cm_f - p_cm_f) > 0.000001
+        # Se quiser comparar Qtd também:
+        # diff_qatu = abs(t_qatu_f - p_qatu_f) > 0.000001
+        # Mas por enquanto a request foca em diff de valor? 
+        # Vou assumir que QATU/DMOV é informativo, mas se diferir conta como diff?
+        # User não especificou, mas geralmente conta. Vou manter só valor por enquanto para não explodir diffs
+        # Se o user pedir para comparar Qtd, eu habilito.
+        
         has_diff = diff_vatu or diff_cm
         
         full_data.append({
@@ -193,6 +214,10 @@ def get_cached_data(force_reload=False):
             "t_cm": t_cm_f,
             "p_vatu": p_vatu_f,
             "p_cm": p_cm_f,
+            "t_qatu": t_qatu_f,
+            "p_qatu": p_qatu_f,
+            "t_dmov": t_dmov,
+            "p_dmov": p_dmov,
             "diff_vatu": diff_vatu,
             "diff_cm": diff_cm,
             "has_diff": has_diff
@@ -203,7 +228,29 @@ def get_cached_data(force_reload=False):
     CACHE_TIMESTAMP = time.strftime("%H:%M:%S")
     return full_data
 
-def apply_filter(data, filter_type):
+def apply_filter(data, filter_type, filter_year, filter_filial):
+    # 0. Filtro de Filial
+    if filter_filial != 'all':
+        data = [item for item in data if item['filial'] == filter_filial]
+
+    # 1. Filtro de Ano (Year) prioritiário
+    # Se filter_year != 'all', só mantemos itens onde pelo menos um dos DMOVs começa com aquele ano
+    if filter_year != 'all':
+        # Suporta múltiplos anos separados por vírgula (ex: "2024,2023")
+        target_years = filter_year.split(',')
+        
+        filtered = []
+        for item in data:
+            # Extrai ano de Teste e Prod (ex: "20240116" -> "2024")
+            y_test = item['t_dmov'][:4] if item['t_dmov'] else ""
+            y_prod = item['p_dmov'][:4] if item['p_dmov'] else ""
+            
+            # Se UM deles coincidir com ALGUM dos anos selecionados, mantemos
+            if y_test in target_years or y_prod in target_years:
+                filtered.append(item)
+        data = filtered
+
+    # 2. Filtro de Diff/Emqual
     if filter_type == 'diff':
         return [item for item in data if item['has_diff']]
     elif filter_type == 'equal':
@@ -214,14 +261,27 @@ def apply_filter(data, filter_type):
 def index():
     page = request.args.get('page', 1, type=int)
     filter_type = request.args.get('filter', 'all')
+    filter_year = request.args.get('year', 'all')
+    filter_filial = request.args.get('filial', 'all')
     force_reload = request.args.get('reload', '0') == '1'
     per_page = 100
 
     # Pega dados do cache (ou carrega se necessário/forçado)
     full_data = get_cached_data(force_reload=force_reload)
     
+    # Extrair anos disponíveis para o select
+    # Varre t_dmov e p_dmov
+    years = set()
+    for item in full_data:
+        if item['t_dmov'] and len(item['t_dmov']) >= 4:
+            years.add(item['t_dmov'][:4])
+        if item['p_dmov'] and len(item['p_dmov']) >= 4:
+            years.add(item['p_dmov'][:4])
+    
+    sorted_years = sorted(list(years), reverse=True)
+    
     # Aplica filtros helper
-    filtered_data = apply_filter(full_data, filter_type)
+    filtered_data = apply_filter(full_data, filter_type, filter_year, filter_filial)
 
     # Calculo de Totais (Baseado no filtro atual)
     totals = {
@@ -229,6 +289,8 @@ def index():
         't_cm': sum(item['t_cm'] for item in filtered_data),
         'p_vatu': sum(item['p_vatu'] for item in filtered_data),
         'p_cm': sum(item['p_cm'] for item in filtered_data),
+        't_qatu': sum(item['t_qatu'] for item in filtered_data),
+        'p_qatu': sum(item['p_qatu'] for item in filtered_data),
     }
 
     # Paginação
@@ -243,10 +305,14 @@ def index():
     
     paginated_data = filtered_data[start:end]
 
+    # Prepara lista de anos selecionados para o template marcar
+    selected_years = filter_year.split(',')
+
     return render_template(
         "index.html",
         comparison_data=paginated_data,
-        filial=FILIAL,
+        filiais_list=FILIAIS,
+        filial_display=FILIAIS_STR, # Só p/ info header se quiser
         last_update=CACHE_TIMESTAMP,
         
         # Stats
@@ -257,29 +323,32 @@ def index():
         # Pagination & Filter
         page=page,
         total_pages=total_pages,
-        current_filter=filter_type
+        current_filter=filter_type,
+        current_year=filter_year,
+        current_filial=filter_filial,
+        selected_years=selected_years,
+        available_years=sorted_years
     )
 
 def get_produtos_prod():
-    sql = """
-        SELECT B2_FILIAL, B2_COD, B2_LOCAL, B2_VATU1, B2_CM1
+    placeholders = ",".join("?" * len(FILIAIS))
+    sql = f"""
+        SELECT B2_FILIAL, B2_COD, B2_LOCAL, B2_VATU1, B2_CM1, B2_QATU, B2_DMOV
           FROM SB2010
-         WHERE B2_FILIAL = ?
+         WHERE B2_FILIAL IN ({placeholders})
          AND D_E_L_E_T_ = ''
          AND B2_COD <> ''
-         -- Mantemos o filtro para não trazer lixo, 
-         -- mas se o produto existir e estiver zerado, 
-         -- cairá no 'else' do loop acima assumindo 0.0, o que está ok.
-         AND (B2_VATU1 <> 0 OR B2_CM1 <> 0)
-         AND B2_DMOV >= '20240101'
-         AND B2_DMOV <= '20241231'
-         ORDER BY B2_COD, B2_LOCAL
+         AND (
+             B2_VATU1 <> 0 
+             OR B2_CM1 <> 0 
+         )
+         ORDER BY B2_FILIAL, B2_COD, B2_LOCAL
     """
     with connect_sql(PROD_SQL) as conn:
         cur = conn.cursor()
-        cur.execute(sql, (FILIAL,))
+        cur.execute(sql, tuple(FILIAIS))
         rows = cur.fetchall()
-        return [(_trim(r.B2_FILIAL), _trim(r.B2_COD), _trim(r.B2_LOCAL), r.B2_VATU1, r.B2_CM1) for r in rows]
+        return [(_trim(r.B2_FILIAL), _trim(r.B2_COD), _trim(r.B2_LOCAL), r.B2_VATU1, r.B2_CM1, r.B2_QATU, _trim(r.B2_DMOV)) for r in rows]
 
 # Endpoint sync removido para este modo de comparação
 
@@ -291,12 +360,14 @@ import xlsxwriter
 def export_excel():
     # 0. Obter dados e filtro
     filter_type = request.args.get('filter', 'all')
+    filter_year = request.args.get('year', 'all')
+    filter_filial = request.args.get('filial', 'all')
     data = get_cached_data() 
     if not data:
         data = []
     
     # 1. Aplicar o MEIO FILTRO que está na tela
-    data = apply_filter(data, filter_type)
+    data = apply_filter(data, filter_type, filter_year, filter_filial)
 
     # 2. Configurar XlsxWriter com Constant Memory (Baixo uso de RAM)
     output = io.BytesIO()
@@ -323,7 +394,12 @@ def export_excel():
     text_fmt = workbook.add_format({})
 
     # 3. Cabeçalhos
-    headers = ["FILIAL", "PRODUTO", "LOCAL", "TESTE_VATU1", "TESTE_CM1", "PROD_VATU1", "PROD_CM1"]
+    # [Filial, Prod, Local, T_VATU, T_CM, T_QATU, T_DMOV, P_VATU, P_CM, P_QATU, P_DMOV]
+    headers = [
+        "FILIAL", "PRODUTO", "LOCAL", 
+        "T_QATU", "T_VATU", "T_CM", "T_DMOV", 
+        "P_QATU", "P_VATU", "P_CM", "P_DMOV"
+    ]
     for col, h in enumerate(headers):
         worksheet.write(0, col, h, header_fmt)
 
@@ -331,13 +407,15 @@ def export_excel():
     worksheet.set_column(0, 0, 10) # Filial
     worksheet.set_column(1, 1, 20) # Produto
     worksheet.set_column(2, 2, 10) # Local
-    worksheet.set_column(3, 6, 15) # Valores
+    worksheet.set_column(3, 10, 15) # Valores
 
     # Acumuladores de Totais
     sum_t_vatu = 0.0
     sum_t_cm = 0.0
+    sum_t_qatu = 0.0
     sum_p_vatu = 0.0
     sum_p_cm = 0.0
+    sum_p_qatu = 0.0
 
     # 4. Loop de Dados
     row_idx = 0
@@ -347,41 +425,63 @@ def export_excel():
         # Conversões (Agora já são floats, mas garantindo default 0.0)
         t_vatu = item.get('t_vatu', 0.0)
         t_cm = item.get('t_cm', 0.0)
+        t_qatu = item.get('t_qatu', 0.0)
+        t_dmov = item.get('t_dmov', "")
+        
         p_vatu = item.get('p_vatu', 0.0)
         p_cm = item.get('p_cm', 0.0)
+        p_qatu = item.get('p_qatu', 0.0)
+        p_dmov = item.get('p_dmov', "")
         
         # Soma
         sum_t_vatu += t_vatu
         sum_t_cm += t_cm
+        sum_t_qatu += t_qatu
         sum_p_vatu += p_vatu
         sum_p_cm += p_cm
+        sum_p_qatu += p_qatu
 
         # Escrever células
+        # 0=Filial, 1=Prod, 2=Local
         worksheet.write(row_idx, 0, item['filial'], text_fmt)
         worksheet.write(row_idx, 1, item['cod'], text_fmt)
         worksheet.write(row_idx, 2, item['local'], text_fmt)
         
-        worksheet.write(row_idx, 3, t_vatu, normal_fmt)
-        worksheet.write(row_idx, 4, t_cm, normal_fmt)
+        # TESTE [QATU, VATU, CM, DMOV]
+        # Col 3..6
+        worksheet.write(row_idx, 3, t_qatu, normal_fmt)
+        worksheet.write(row_idx, 4, t_vatu, normal_fmt)
+        worksheet.write(row_idx, 5, t_cm, normal_fmt)
+        worksheet.write(row_idx, 6, t_dmov, text_fmt)
         
-        # Formatação Condicional na Linha
+        # PROD [QATU, VATU, CM, DMOV]
+        # Col 7..10
+        # Formatação Condicional na Linha (se diff valor)
         fmt_vatu = diff_fmt if item['diff_vatu'] else normal_fmt
         fmt_cm = diff_fmt if item['diff_cm'] else normal_fmt
         
-        worksheet.write(row_idx, 5, p_vatu, fmt_vatu)
-        worksheet.write(row_idx, 6, p_cm, fmt_cm)
+        worksheet.write(row_idx, 7, p_qatu, normal_fmt)
+        worksheet.write(row_idx, 8, p_vatu, fmt_vatu)
+        worksheet.write(row_idx, 9, p_cm, fmt_cm)
+        worksheet.write(row_idx, 10, p_dmov, text_fmt)
 
     # 5. Escrever Totais na última linha
     last_row = row_idx + 1
     worksheet.write(last_row, 0, "TOTAL GERAL", total_fmt)
-    # Mesclar ou deixar vazio as colunas B e C
     worksheet.write(last_row, 1, "", total_fmt)
     worksheet.write(last_row, 2, "", total_fmt)
     
-    worksheet.write(last_row, 3, sum_t_vatu, total_fmt)
-    worksheet.write(last_row, 4, sum_t_cm, total_fmt)
-    worksheet.write(last_row, 5, sum_p_vatu, total_fmt)
-    worksheet.write(last_row, 6, sum_p_cm, total_fmt)
+    # Test Totais
+    worksheet.write(last_row, 3, sum_t_qatu, total_fmt)
+    worksheet.write(last_row, 4, sum_t_vatu, total_fmt)
+    worksheet.write(last_row, 5, sum_t_cm, total_fmt)
+    worksheet.write(last_row, 6, "", total_fmt)
+
+    # Prod Totais
+    worksheet.write(last_row, 7, sum_p_qatu, total_fmt)
+    worksheet.write(last_row, 8, sum_p_vatu, total_fmt)
+    worksheet.write(last_row, 9, sum_p_cm, total_fmt)
+    worksheet.write(last_row, 10, "", total_fmt)
 
     # 6. Fechar e Enviar
     workbook.close()

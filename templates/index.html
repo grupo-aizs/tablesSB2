@@ -239,6 +239,97 @@
     .row-diff:hover {
       background: rgba(255, 77, 77, 0.25) !important;
     }
+
+    /* Custom Dropdown for Years */
+    .dropdown {
+      position: relative;
+      display: inline-block;
+    }
+
+    .dropdown-toggle {
+      background: rgba(0, 0, 0, 0.3) !important;
+      border: 1px solid var(--line) !important;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 140px;
+      justify-content: space-between;
+    }
+
+    .dropdown-menu {
+      display: none;
+      position: absolute;
+      top: 105%;
+      left: 0;
+      background: #162035;
+      min-width: 265px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 8px;
+      z-index: 100;
+      animation: fadeIn 0.15s ease-out;
+    }
+
+    .dropdown-menu.show {
+      display: block;
+    }
+
+    .dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      color: var(--text);
+      cursor: pointer;
+      border-radius: 8px;
+      transition: background 0.2s;
+      user-select: none;
+      font-size: 13px;
+    }
+
+    .dropdown-item:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .dropdown-item input[type="checkbox"] {
+      accent-color: var(--brand);
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+      margin: 0;
+    }
+
+    .dropdown-actions {
+      padding: 8px 4px 4px 4px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      margin-top: 6px;
+      text-align: right;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(-5px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Overlay for clicking outside */
+    .overlay-click {
+      position: fixed;
+      inset: 0;
+      z-index: 90;
+      display: none;
+    }
+
+    .overlay-click.show {
+      display: block;
+    }
   </style>
 </head>
 
@@ -258,12 +349,62 @@
         <!-- Export -->
         <button onclick="exportExcel()" title="Baixar Excel Completo">📊 Excel</button>
 
+        <!-- Filter Filial -->
+        <select id="filialSelect" onchange="changeFilial(this.value)">
+          <option value="all" {% if current_filial=='all' %}selected{% endif %}>Todas Filiais</option>
+          {% for f in filiais_list %}
+          <option value="{{ f }}" {% if current_filial==f %}selected{% endif %}>{{ f }}</option>
+          {% endfor %}
+        </select>
+
+        <!-- Filter Dropdown -->
         <!-- Filter Dropdown -->
         <select id="filterSelect" onchange="changeFilter(this.value)">
           <option value="all" {% if current_filter=='all' %}selected{% endif %}>Mostrar Tudo</option>
           <option value="diff" {% if current_filter=='diff' %}selected{% endif %}>⚠️ Apenas Divergentes</option>
           <option value="equal" {% if current_filter=='equal' %}selected{% endif %}>✅ Apenas Iguais</option>
         </select>
+
+        <!-- Custom Filter Year Dropdown -->
+        <div class="dropdown">
+          <button class="dropdown-toggle" onclick="toggleDateMenu()">
+            <span>
+              📅
+              {% if 'all' in selected_years %}
+              Todos os Anos
+              {% else %}
+              {{ selected_years|length }} ano(s)
+              {% endif %}
+            </span>
+            <small>▼</small>
+          </button>
+          <div id="yearDropdownMenu" class="dropdown-menu">
+            <label class="dropdown-item">
+              <input type="checkbox" id="chk-all" onchange="toggleAll(this)" {% if 'all' in selected_years %}checked{%
+                endif %}>
+              <b>Todos os Anos</b>
+            </label>
+            <div style="height: 1px; background: rgba(255,255,255,0.1); margin: 6px 0;"></div>
+
+            <div style="max-height: 200px; overflow-y: auto;">
+              {% for y in available_years %}
+              <label class="dropdown-item">
+                <input type="checkbox" class="chk-year" value="{{ y }}" onchange="checkManual()" {% if y in
+                  selected_years and 'all' not in selected_years %}checked{% endif %}>
+                {{ y }}
+              </label>
+              {% endfor %}
+            </div>
+
+            <div class="dropdown-actions">
+              <button onclick="applyYearFilter()"
+                style="width:100%; border:none; background: var(--apple-blue, #4aa3ff); color:#fff;">
+                Aplicar Filtro
+              </button>
+            </div>
+          </div>
+        </div>
+        <div id="overlayGlobal" class="overlay-click" onclick="closeDateMenu()"></div>
 
         <!-- Pagination -->
         <div class="pagination-ctrls">
@@ -289,23 +430,27 @@
               <th rowspan="2" style="width:80px;">LOCAL</th>
 
               <!-- Grupo Teste -->
-              <th colspan="2" style="text-align:center; border-left:1px solid #4aa3ff; color:#4aa3ff;">
+              <th colspan="4" style="text-align:center; border-left:1px solid #4aa3ff; color:#4aa3ff;">
                 TESTE
               </th>
 
               <!-- Grupo Produção -->
-              <th colspan="2" style="text-align:center; border-left:1px solid #ffcc66; color:#ffcc66;">
+              <th colspan="4" style="text-align:center; border-left:1px solid #ffcc66; color:#ffcc66;">
                 PRODUÇÃO
               </th>
             </tr>
             <tr>
               <!-- Sub Headers Teste -->
-              <th class="right" style="border-left:1px solid rgba(74,163,255,.3);">B2_VATU1</th>
-              <th class="right">B2_CM1</th>
+              <th class="right" style="border-left:1px solid rgba(74,163,255,.3);">Qtd</th>
+              <th class="right">Valor</th>
+              <th class="right">CM</th>
+              <th class="right">D. Mov</th>
 
               <!-- Sub Headers Prod -->
-              <th class="right" style="border-left:1px solid rgba(255,204,102,.3);">B2_VATU1</th>
-              <th class="right">B2_CM1</th>
+              <th class="right" style="border-left:1px solid rgba(255,204,102,.3);">Qtd</th>
+              <th class="right">Valor</th>
+              <th class="right">CM</th>
+              <th class="right">D. Mov</th>
             </tr>
             <!-- Linha de Totais (Agora no Topo) -->
             <tr>
@@ -315,18 +460,30 @@
 
               <!-- Totais Teste -->
               <th class="right" style="color:#bae0ff; border-left:1px solid rgba(74,163,255,.1);">
+                {{ totals.t_qatu | format_br }}
+              </th>
+              <th class="right" style="color:#bae0ff;">
                 {{ totals.t_vatu | format_br }}
               </th>
               <th class="right" style="color:#bae0ff;">
                 {{ totals.t_cm | format_br }}
               </th>
+              <th class="right" style="color:#bae0ff;">
+                -
+              </th>
 
               <!-- Totais Produção -->
               <th class="right" style="color:#2de38b; border-left:1px solid rgba(255,204,102,.1);">
+                {{ totals.p_qatu | format_br }}
+              </th>
+              <th class="right" style="color:#2de38b;">
                 {{ totals.p_vatu | format_br }}
               </th>
               <th class="right" style="color:#2de38b;">
                 {{ totals.p_cm | format_br }}
+              </th>
+              <th class="right" style="color:#2de38b;">
+                -
               </th>
             </tr>
           </thead>
@@ -339,19 +496,30 @@
 
               <!-- Val Teste -->
               <td class="right" style="border-left:1px solid rgba(74,163,255,.1); color:#bae0ff;">
+                {{ item.t_qatu | format_br }}
+              </td>
+              <td class="right" style="color:#bae0ff;">
                 {{ item.t_vatu | format_br }}
               </td>
               <td class="right" style="color:#bae0ff;">
                 {{ item.t_cm | format_br }}
               </td>
+              <td class="right mono" style="color:#bae0ff; font-size:11px;">
+                {{ item.t_dmov }}
+              </td>
 
               <!-- Val Prod -->
-              <td class="right {% if item.diff_vatu %}diff{% else %}match{% endif %}"
-                style="border-left:1px solid rgba(255,204,102,.1);">
+              <td class="right" style="border-left:1px solid rgba(255,204,102,.1); color:#bae0ff;">
+                {{ item.p_qatu | format_br }}
+              </td>
+              <td class="right {% if item.diff_vatu %}diff{% else %}match{% endif %}">
                 {{ item.p_vatu | format_br }}
               </td>
               <td class="right {% if item.diff_cm %}diff{% else %}match{% endif %}">
                 {{ item.p_cm | format_br }}
+              </td>
+              <td class="right mono" style="font-size:11px;">
+                {{ item.p_dmov }}
               </td>
             </tr>
             {% endfor %}
@@ -372,7 +540,9 @@
     function exportExcel() {
       const params = getParams();
       const filter = params.get('filter') || 'all';
-      window.location.href = `/export_excel?filter=${filter}`;
+      const year = params.get('year') || 'all';
+      const filial = params.get('filial') || 'all';
+      window.location.href = `/export_excel?filter=${filter}&year=${year}&filial=${filial}`;
     }
 
     function changePage(p) {
@@ -386,6 +556,75 @@
       const params = getParams();
       params.set('filter', val);
       params.set('page', 1); // Reset page on filter change
+      window.location.href = `/?${params.toString()}`;
+    }
+
+    function changeFilial(val) {
+      const params = getParams();
+      params.set('filial', val);
+      params.set('page', 1);
+      window.location.href = `/?${params.toString()}`;
+    }
+
+    // --- UI Logic para Custom Dropdown ---
+    function toggleDateMenu() {
+      const menu = document.getElementById('yearDropdownMenu');
+      const ov = document.getElementById('overlayGlobal');
+      if (menu.classList.contains('show')) {
+        closeDateMenu();
+      } else {
+        menu.classList.add('show');
+        ov.classList.add('show');
+      }
+    }
+
+    function closeDateMenu() {
+      document.getElementById('yearDropdownMenu').classList.remove('show');
+      document.getElementById('overlayGlobal').classList.remove('show');
+    }
+
+    function toggleAll(el) {
+      const checkboxes = document.querySelectorAll('.chk-year');
+      checkboxes.forEach(chk => {
+        chk.checked = false; // Se marcou "Todos", desmarca manuais visualmente ou mantém?
+        // Melhor UX: se marca todos, desabilita ou desmarca outros para deixar claro que é "ALL"
+        // Vamos desmarcar os outros para simplificar a lógica na hora de ler
+        if (el.checked) chk.checked = false;
+      });
+    }
+
+    function checkManual() {
+      // Se o usuário marcar um ano específico, desmarca o "Todos"
+      const chkAll = document.getElementById('chk-all');
+      const anyChecked = Array.from(document.querySelectorAll('.chk-year')).some(c => c.checked);
+
+      if (anyChecked) {
+        chkAll.checked = false;
+      }
+    }
+
+    function applyYearFilter() {
+      const chkAll = document.getElementById('chk-all');
+      const checkboxes = document.querySelectorAll('.chk-year');
+
+      let val = 'all';
+
+      if (!chkAll.checked) {
+        const selected = Array.from(checkboxes)
+          .filter(c => c.checked)
+          .map(c => c.value);
+
+        if (selected.length > 0) {
+          val = selected.join(',');
+        } else {
+          // Se nada marcado, assume all ou mostra nada? Normalmente users esperam "All" se nada selecionado
+          val = 'all';
+        }
+      }
+
+      const params = getParams();
+      params.set('year', val);
+      params.set('page', 1);
       window.location.href = `/?${params.toString()}`;
     }
 
