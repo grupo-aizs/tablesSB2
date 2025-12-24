@@ -172,11 +172,13 @@ def get_cached_data(force_reload=False):
         else:
             p_vatu, p_cm = 0.0, 0.0
             
-        t_vatu_f = float(t_vatu) if t_vatu else 0.0
-        p_vatu_f = float(p_vatu) if p_vatu else 0.0
-        t_cm_f = float(t_cm) if t_cm else 0.0
-        p_cm_f = float(p_cm) if p_cm else 0.0
+        t_vatu_f = round(float(t_vatu) if t_vatu else 0.0, 6)
+        p_vatu_f = round(float(p_vatu) if p_vatu else 0.0, 6)
+        t_cm_f = round(float(t_cm) if t_cm else 0.0, 6)
+        p_cm_f = round(float(p_cm) if p_cm else 0.0, 6)
 
+        # Agora a comparação pode ser exata (ou com epsilon muito baixo),
+        # pois já arredondamos para o que é visível.
         diff_vatu = abs(t_vatu_f - p_vatu_f) > 0.000001
         diff_cm = abs(t_cm_f - p_cm_f) > 0.000001
         has_diff = diff_vatu or diff_cm
