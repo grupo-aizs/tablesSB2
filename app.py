@@ -28,6 +28,17 @@ PROD_SQL = {
     "port": int(os.environ.get("MSSQL_PORT_PROD", 1433)),
 }
 
+def format_br(value):
+    """Formata float para padrão BR (1.234,567890) com 6 casas"""
+    if value is None:
+        return "0,000000"
+    # Formata como US (com virgula de milhar e ponto decimal)
+    us_fmt = "{:,.6f}".format(value)
+    # Inverte os caracteres
+    return us_fmt.replace(",", "X").replace(".", ",").replace("X", ".")
+
+app.jinja_env.filters['format_br'] = format_br
+
 def pick_driver():
     drivers = pyodbc.drivers()
     for preferred in ("ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server"):
@@ -174,10 +185,10 @@ def get_cached_data(force_reload=False):
             "filial": t_filial,
             "cod": t_cod,
             "local": t_local,
-            "t_vatu": f"{t_vatu_f:.6f}",
-            "t_cm": f"{t_cm_f:.6f}",
-            "p_vatu": f"{p_vatu_f:.6f}",
-            "p_cm": f"{p_cm_f:.6f}",
+            "t_vatu": t_vatu_f,
+            "t_cm": t_cm_f,
+            "p_vatu": p_vatu_f,
+            "p_cm": p_cm_f,
             "diff_vatu": diff_vatu,
             "diff_cm": diff_cm,
             "has_diff": has_diff
@@ -210,10 +221,10 @@ def index():
 
     # Calculo de Totais (Baseado no filtro atual)
     totals = {
-        't_vatu': sum(float(item['t_vatu']) for item in filtered_data),
-        't_cm': sum(float(item['t_cm']) for item in filtered_data),
-        'p_vatu': sum(float(item['p_vatu']) for item in filtered_data),
-        'p_cm': sum(float(item['p_cm']) for item in filtered_data),
+        't_vatu': sum(item['t_vatu'] for item in filtered_data),
+        't_cm': sum(item['t_cm'] for item in filtered_data),
+        'p_vatu': sum(item['p_vatu'] for item in filtered_data),
+        'p_cm': sum(item['p_cm'] for item in filtered_data),
     }
 
     # Paginação
@@ -327,13 +338,11 @@ def export_excel():
     for i, item in enumerate(data, start=1):
         row_idx = i
         # Conversões
-        try:
-            t_vatu = float(item['t_vatu'])
-            t_cm = float(item['t_cm'])
-            p_vatu = float(item['p_vatu'])
-            p_cm = float(item['p_cm'])
-        except:
-            t_vatu = t_cm = p_vatu = p_cm = 0.0
+        # Conversões (Agora já são floats, mas garantindo default 0.0)
+        t_vatu = item.get('t_vatu', 0.0)
+        t_cm = item.get('t_cm', 0.0)
+        p_vatu = item.get('p_vatu', 0.0)
+        p_cm = item.get('p_cm', 0.0)
         
         # Soma
         sum_t_vatu += t_vatu

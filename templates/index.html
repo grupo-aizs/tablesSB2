@@ -315,18 +315,18 @@
 
               <!-- Totais Teste -->
               <th class="right" style="color:#bae0ff; border-left:1px solid rgba(74,163,255,.1);">
-                {{ "%.6f"|format(totals.t_vatu) }}
+                {{ totals.t_vatu | format_br }}
               </th>
               <th class="right" style="color:#bae0ff;">
-                {{ "%.6f"|format(totals.t_cm) }}
+                {{ totals.t_cm | format_br }}
               </th>
 
               <!-- Totais Produção -->
               <th class="right" style="color:#2de38b; border-left:1px solid rgba(255,204,102,.1);">
-                {{ "%.6f"|format(totals.p_vatu) }}
+                {{ totals.p_vatu | format_br }}
               </th>
               <th class="right" style="color:#2de38b;">
-                {{ "%.6f"|format(totals.p_cm) }}
+                {{ totals.p_cm | format_br }}
               </th>
             </tr>
           </thead>
@@ -339,19 +339,19 @@
 
               <!-- Val Teste -->
               <td class="right" style="border-left:1px solid rgba(74,163,255,.1); color:#bae0ff;">
-                {{ item.t_vatu }}
+                {{ item.t_vatu | format_br }}
               </td>
               <td class="right" style="color:#bae0ff;">
-                {{ item.t_cm }}
+                {{ item.t_cm | format_br }}
               </td>
 
               <!-- Val Prod -->
               <td class="right {% if item.diff_vatu %}diff{% else %}match{% endif %}"
                 style="border-left:1px solid rgba(255,204,102,.1);">
-                {{ item.p_vatu }}
+                {{ item.p_vatu | format_br }}
               </td>
               <td class="right {% if item.diff_cm %}diff{% else %}match{% endif %}">
-                {{ item.p_cm }}
+                {{ item.p_cm | format_br }}
               </td>
             </tr>
             {% endfor %}
