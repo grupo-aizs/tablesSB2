@@ -177,8 +177,8 @@ def get_cached_data(force_reload=False):
         t_cm_f = float(t_cm) if t_cm else 0.0
         p_cm_f = float(p_cm) if p_cm else 0.0
 
-        diff_vatu = abs(t_vatu_f - p_vatu_f) > 0.001
-        diff_cm = abs(t_cm_f - p_cm_f) > 0.001
+        diff_vatu = abs(t_vatu_f - p_vatu_f) > 0.000001
+        diff_cm = abs(t_cm_f - p_cm_f) > 0.000001
         has_diff = diff_vatu or diff_cm
         
         full_data.append({
