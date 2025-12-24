@@ -29,11 +29,11 @@ PROD_SQL = {
 }
 
 def format_br(value):
-    """Formata float para padrão BR (1.234,567890) com 6 casas"""
+    """Formata float para padrão BR (1.234,56) com 2 casas"""
     if value is None:
-        return "0,000000"
+        return "0,00"
     # Formata como US (com virgula de milhar e ponto decimal)
-    us_fmt = "{:,.6f}".format(value)
+    us_fmt = "{:,.2f}".format(value)
     # Inverte os caracteres
     return us_fmt.replace(",", "X").replace(".", ",").replace("X", ".")
 
@@ -172,10 +172,10 @@ def get_cached_data(force_reload=False):
         else:
             p_vatu, p_cm = 0.0, 0.0
             
-        t_vatu_f = round(float(t_vatu) if t_vatu else 0.0, 6)
-        p_vatu_f = round(float(p_vatu) if p_vatu else 0.0, 6)
-        t_cm_f = round(float(t_cm) if t_cm else 0.0, 6)
-        p_cm_f = round(float(p_cm) if p_cm else 0.0, 6)
+        t_vatu_f = round(float(t_vatu) if t_vatu else 0.0, 2)
+        p_vatu_f = round(float(p_vatu) if p_vatu else 0.0, 2)
+        t_cm_f = round(float(t_cm) if t_cm else 0.0, 2)
+        p_cm_f = round(float(p_cm) if p_cm else 0.0, 2)
 
         # Agora a comparação pode ser exata (ou com epsilon muito baixo),
         # pois já arredondamos para o que é visível.
@@ -310,12 +310,12 @@ def export_excel():
     total_fmt = workbook.add_format({
         'bold': True,
         'bg_color': '#e1e1e1',
-        'num_format': '0.000000',
+        'num_format': '#,##0.00',
         'top': 1
     })
 
-    diff_fmt = workbook.add_format({'bold': True, 'font_color': '#FF0000', 'num_format': '0.000000'})
-    normal_fmt = workbook.add_format({'num_format': '0.000000'})
+    diff_fmt = workbook.add_format({'bold': True, 'font_color': '#FF0000', 'num_format': '#,##0.00'})
+    normal_fmt = workbook.add_format({'num_format': '#,##0.00'})
     text_fmt = workbook.add_format({})
 
     # 3. Cabeçalhos
