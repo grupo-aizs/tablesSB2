@@ -254,60 +254,21 @@
             <div class="table-wrap">
                 <table id="resultsTable">
                     <thead>
-
-                        <!-- Grupo Headers -->
                         <tr>
-                            <th rowspan="2" style="width:100px;">CÓDIGO</th>
-                            <th rowspan="2" style="width:200px;">DESCRIÇÃO / OBS</th>
-                            <th rowspan="2" style="width:80px;">STATUS</th>
+                            <th style="width:100px;">CÓDIGO</th>
+                            <th style="max-width:250px;">DESCRIÇÃO / OBS</th>
+                            <th style="width:80px;">STATUS</th>
+                            <th style="width:100px; color:#4aa3ff;">FILIAL</th>
+                            <th style="width:120px; color:#4aa3ff;">LOCAL</th>
 
-                            <!-- Grupo Teste -->
-                            <th colspan="3" style="text-align:center; border-left:1px solid #4aa3ff; color:#4aa3ff;">
-                                BASE TESTE (SQL)
-                            </th>
+                            <!-- Teste -->
+                            <th class="right" style="color:#4aa3ff;">QTD TESTE</th>
+                            <th class="right" style="color:#4aa3ff;">VALOR TESTE</th>
 
-                            <!-- Grupo Importado -->
-                            <th colspan="2" style="text-align:center; border-left:1px solid #ffcc66; color:#ffcc66;">
-                                IMPORTADO (EXCEL)
-                            </th>
+                            <!-- Imports -->
+                            <th class="right" style="color:#ffcc66;">QTD EXCEL</th>
+                            <th class="right" style="color:#ffcc66;">VALOR EXCEL</th>
                         </tr>
-
-                        <!-- Sub Headers -->
-                        <tr>
-                            <!-- Teste Cols -->
-                            <th class="right" style="border-left:1px solid rgba(74,163,255,.3);">Qtd Total</th>
-                            <th class="right">Valor Total</th>
-                            <th style="font-size:11px; color:var(--muted); min-width:150px;">Locais Armaz.</th>
-
-                            <!-- Importado Cols -->
-                            <th class="right" style="border-left:1px solid rgba(255,204,102,.3);">Quantidade</th>
-                            <th class="right">Valor</th>
-                        </tr>
-
-                        <!-- Totais Row -->
-                        <tr>
-                            <th colspan="3" class="right" style="text-align:right; font-style:italic; opacity:0.8;">
-                                TOTAIS GERAIS:
-                            </th>
-
-                            <!-- Total Teste -->
-                            <th class="right" style="color:#bae0ff; border-left:1px solid rgba(74,163,255,.1);">
-                                {{ totals.t_qatu | format_br }}
-                            </th>
-                            <th class="right" style="color:#bae0ff;">
-                                {{ totals.t_vatu | format_br }}
-                            </th>
-                            <th></th>
-
-                            <!-- Total Importado -->
-                            <th class="right" style="color:#2de38b; border-left:1px solid rgba(255,204,102,.1);">
-                                {{ totals.i_qatu | format_br }}
-                            </th>
-                            <th class="right" style="color:#2de38b;">
-                                {{ totals.i_vatu | format_br }}
-                            </th>
-                        </tr>
-
                     </thead>
                     <tbody>
                         {% for item in data %}
@@ -325,21 +286,20 @@
                                 {% endif %}
                             </td>
 
+                            <!-- Filial / Local -->
+                            <td class="mono" style="font-size:11px; color:#bae0ff;">{{ item.filiais }}</td>
+                            <td class="mono" style="font-size:11px; color:#bae0ff;">{{ item.locais }}</td>
+
                             <!-- Teste Values -->
-                            <td class="right mono" style="border-left:1px solid rgba(74,163,255,.1); color:#bae0ff;">
+                            <td class="right mono" style="color:#bae0ff;">
                                 {{ item.t_qatu | format_br }}
                             </td>
                             <td class="right mono" style="color:#bae0ff;">
                                 {{ item.t_vatu | format_br }}
                             </td>
-                            <td style="font-size:10px; color:rgba(255,255,255,0.4); max-width:150px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;"
-                                title="{{ item.details }}">
-                                {{ item.details }}
-                            </td>
 
                             <!-- Import Values -->
-                            <td class="right mono {% if item.diff_qatu %}diff{% else %}match{% endif %}"
-                                style="border-left:1px solid rgba(255,204,102,.1);">
+                            <td class="right mono {% if item.diff_qatu %}diff{% else %}match{% endif %}">
                                 {{ item.i_qatu | format_br }}
                             </td>
                             <td class="right mono {% if item.diff_vatu %}diff{% else %}match{% endif %}">

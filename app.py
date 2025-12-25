@@ -561,18 +561,18 @@ def upload_analise():
         # Carregar dados da Base Teste
         test_data_raw = get_produtos_teste()
         
-        # Agrupar dados de Teste em Dict: Código -> {qatu: sum, vatu: sum, details: str}
-        # Nota: Comparar linha a linha do excel com o TOTAL do código na base.
+        # Agrupar dados de Teste em Dict: Código -> {qatu: sum, vatu: sum, details: str, filiais: set}
         test_db_map = {}
         for r in test_data_raw:
             # r = (filial, cod, local, vatu1, cm1, qatu, dmov)
             c_key = r[1].strip()
             if c_key not in test_db_map:
-                test_db_map[c_key] = {'qatu': 0.0, 'vatu': 0.0, 'locais': []}
+                test_db_map[c_key] = {'qatu': 0.0, 'vatu': 0.0, 'locais': [], 'filiais': set()}
             
             test_db_map[c_key]['qatu'] += float(r[5] or 0)
             test_db_map[c_key]['vatu'] += float(r[3] or 0)
-            test_db_map[c_key]['locais'].append(f"{r[0]}-{r[2]}")
+            test_db_map[c_key]['locais'].append(r[2]) # Apenas o local
+            test_db_map[c_key]['filiais'].add(r[0])   # Filial separada
             
         # Processar Lista Final
         results = []
@@ -595,7 +595,14 @@ def upload_analise():
             
             t_qatu = db_entry['qatu'] if found else 0.0
             t_vatu = db_entry['vatu'] if found else 0.0
-            details = "; ".join(db_entry['locais']) if found else ""
+            
+            # Separa Filiais e Locais
+            if found:
+                filiais_str = ", ".join(sorted(list(db_entry['filiais'])))
+                locais_str = ", ".join(sorted(list(set(db_entry['locais'])))) # unique locais
+            else:
+                filiais_str = ""
+                locais_str = ""
             
             # Diffs (com tolerância pequena)
             diff_qatu = abs(t_qatu - i_qatu) > 0.01
@@ -605,7 +612,8 @@ def upload_analise():
             results.append({
                 'cod': code_val,
                 'desc': row.get('Descrição', row.get('Descr', '')), # Tenta pegar descrição se tiver
-                'details': details,
+                'filiais': filiais_str,
+                'locais': locais_str,
                 
                 # Teste
                 't_qatu': t_qatu,
@@ -620,8 +628,6 @@ def upload_analise():
                 'diff_qatu': diff_qatu,
                 'diff_vatu': diff_vatu,
                 'has_diff': has_diff,
-                
-                # Raw row for debugging or extra cols if needed (not sending all to keep light)
             })
             
         # Salva no cache global para exportação
@@ -663,7 +669,8 @@ def export_analise():
     # Cabeçalhos
     headers = [
         "CÓDIGO", "DESCRIÇÃO", "STATUS", 
-        "QTD TESTE", "VALOR TESTE", "LOCAIS TESTE",
+        "FILIAIS", "LOCAIS",
+        "QTD TESTE", "VALOR TESTE",
         "QTD IMPORTADA", "VALOR IMPORTADO"
     ]
     for col, h in enumerate(headers):
@@ -673,7 +680,8 @@ def export_analise():
     worksheet.set_column(0, 0, 15) # Cod
     worksheet.set_column(1, 1, 35) # Desc
     worksheet.set_column(2, 2, 15) # Status
-    worksheet.set_column(3, 7, 15) # Vals
+    worksheet.set_column(3, 4, 15) # Filial/Local
+    worksheet.set_column(5, 8, 15) # Vals
 
     # Dados
     for i, item in enumerate(LATEST_IMPORT_DATA, start=1):
@@ -683,17 +691,19 @@ def export_analise():
         status = "CADASTRO OK" if item['found'] else "NÃO EXISTE"
         worksheet.write(i, 2, status, text_fmt)
         
+        worksheet.write(i, 3, item['filiais'], text_fmt)
+        worksheet.write(i, 4, item['locais'], text_fmt)
+        
         # Teste
-        worksheet.write(i, 3, item['t_qatu'], normal_fmt)
-        worksheet.write(i, 4, item['t_vatu'], normal_fmt)
-        worksheet.write(i, 5, item['details'], text_fmt)
+        worksheet.write(i, 5, item['t_qatu'], normal_fmt)
+        worksheet.write(i, 6, item['t_vatu'], normal_fmt)
         
         # Importado (Destaca Diff)
         fmt_qatu = diff_fmt if item['diff_qatu'] else normal_fmt
         fmt_vatu = diff_fmt if item['diff_vatu'] else normal_fmt
         
-        worksheet.write(i, 6, item['i_qatu'], fmt_qatu)
-        worksheet.write(i, 7, item['i_vatu'], fmt_vatu)
+        worksheet.write(i, 7, item['i_qatu'], fmt_qatu)
+        worksheet.write(i, 8, item['i_vatu'], fmt_vatu)
 
     workbook.close()
     output.seek(0)
