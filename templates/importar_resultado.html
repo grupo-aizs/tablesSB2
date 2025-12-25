@@ -261,25 +261,14 @@
                     <thead>
                         <tr>
                             <th style="width:100px;">CÓDIGO</th>
-                            <th style="max-width:250px;">DESCRIÇÃO / OBS</th>
-                            <th style="width:80px;">STATUS</th>
-                            <th style="width:100px; color:#4aa3ff;">FILIAL</th>
-                            <th style="width:120px; color:#4aa3ff;">LOCAL</th>
-
-                            <!-- Teste -->
-                            <th class="right" style="color:#4aa3ff;">QTD TESTE</th>
+                            <th style="width:120px;">STATUS</th>
+                            <th style="width:150px; color:#4aa3ff;">FILIAL</th>
                             <th class="right" style="color:#4aa3ff;">VALOR TESTE</th>
-
-                            <!-- Imports -->
-                            <th class="right" style="color:#ffcc66;">QTD EXCEL</th>
-                            <th class="right" style="color:#ffcc66;">VALOR EXCEL</th>
                         </tr>
                         <!-- Filter Row -->
                         <tr class="filter-row">
                             <th><input type="text" class="filter-input" placeholder="Filtrar Código..."
                                     onkeyup="updateFilter('cod', this.value)"></th>
-                            <th><input type="text" class="filter-input" placeholder="Filtrar Desc..."
-                                    onkeyup="updateFilter('desc', this.value)"></th>
                             <th>
                                 <select class="filter-input" onchange="updateFilter('status', this.value)">
                                     <option value="">Todos</option>
@@ -289,13 +278,8 @@
                             </th>
                             <th><input type="text" class="filter-input" placeholder="Filtrar Filial..."
                                     onkeyup="updateFilter('filial', this.value)"></th>
-                            <th><input type="text" class="filter-input" placeholder="Filtrar Local..."
-                                    onkeyup="updateFilter('local', this.value)"></th>
-                            <th></th> <!-- Qtd Teste -->
                             <th><input type="text" class="filter-input right" placeholder="Filtrar Valor..."
                                     onkeyup="updateFilter('val_teste', this.value)"></th>
-                            <th></th> <!-- Qtd Excel -->
-                            <th></th> <!-- Valor Excel -->
                         </tr>
                     </thead>
                     <tbody>
@@ -305,7 +289,6 @@
                             data-found="{{ 'true' if item.found else 'false' }}">
 
                             <td class="mono" style="font-weight:bold;">{{ item.cod }}</td>
-                            <td style="font-size:12px; color:rgba(255,255,255,0.7);">{{ item.desc }}</td>
                             <td>
                                 {% if item.found %}
                                 <span class="status-found">CADASTRO OK</span>
@@ -314,24 +297,12 @@
                                 {% endif %}
                             </td>
 
-                            <!-- Filial / Local -->
+                            <!-- Filial -->
                             <td class="mono" style="font-size:11px; color:#bae0ff;">{{ item.filiais }}</td>
-                            <td class="mono" style="font-size:11px; color:#bae0ff;">{{ item.locais }}</td>
 
-                            <!-- Teste Values -->
-                            <td class="right mono" style="color:#bae0ff;">
-                                {{ item.t_qatu | format_br }}
-                            </td>
+                            <!-- Teste Value -->
                             <td class="right mono" style="color:#bae0ff;">
                                 {{ item.t_vatu | format_br }}
-                            </td>
-
-                            <!-- Import Values -->
-                            <td class="right mono {% if item.diff_qatu %}diff{% else %}match{% endif %}">
-                                {{ item.i_qatu | format_br }}
-                            </td>
-                            <td class="right mono {% if item.diff_vatu %}diff{% else %}match{% endif %}">
-                                {{ item.i_vatu | format_br }}
                             </td>
                         </tr>
                         {% endfor %}
@@ -346,10 +317,8 @@
         const activeFilters = {
             global: 'all',
             cod: '',
-            desc: '',
             status: '',
             filial: '',
-            local: '',
             val_teste: ''
         };
 
@@ -373,25 +342,23 @@
 
                 // 2. Check Text Filters
                 // Get cell contents. Indices match the <td> order
+                // Order: 0: Cod, 1: Status, 2: Filial, 3: ValTeste
                 const cells = row.getElementsByTagName('td');
-                // 0: Cod, 1: Desc, 2: Status, 3: Filial, 4: Local, 5: QtdT, 6: ValT
+
+                if (cells.length < 4) return; // safety
 
                 const txtCod = cells[0].textContent.toLowerCase();
-                const txtDesc = cells[1].textContent.toLowerCase();
-                const txtStatus = cells[2].textContent.trim().toLowerCase(); // span inside
-                const txtFilial = cells[3].textContent.toLowerCase();
-                const txtLocal = cells[4].textContent.toLowerCase();
-                const txtValTeste = cells[6].textContent.toLowerCase();
+                const txtStatus = cells[1].textContent.trim().toLowerCase();
+                const txtFilial = cells[2].textContent.toLowerCase();
+                const txtValTeste = cells[3].textContent.toLowerCase();
 
                 const passCod = !activeFilters.cod || txtCod.includes(activeFilters.cod);
-                const passDesc = !activeFilters.desc || txtDesc.includes(activeFilters.desc);
                 const passStatus = !activeFilters.status || txtStatus.includes(activeFilters.status);
                 const passFilial = !activeFilters.filial || txtFilial.includes(activeFilters.filial);
-                const passLocal = !activeFilters.local || txtLocal.includes(activeFilters.local);
                 const passValTeste = !activeFilters.val_teste || txtValTeste.includes(activeFilters.val_teste);
 
                 // Final Decision
-                if (passGlobal && passCod && passDesc && passStatus && passFilial && passLocal && passValTeste) {
+                if (passGlobal && passCod && passStatus && passFilial && passValTeste) {
                     row.style.display = '';
                 } else {
                     row.style.display = 'none';
