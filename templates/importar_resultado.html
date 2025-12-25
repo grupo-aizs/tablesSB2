@@ -241,13 +241,6 @@
 
             <div style="display:flex; gap:10px; align-items:center;">
 
-                <select id="filterStatus" onchange="updateFilter('global', this.value)">
-                    <option value="all">Mostrar Tudo</option>
-                    <option value="diff">⚠️ Com Divergência</option>
-                    <option value="ok">✅ Iguais</option>
-                    <option value="missing">❌ Produto Não Cadastrado</option>
-                </select>
-
                 <button class="btn-secondary" onclick="window.location.href='/importar'">Nova Importação</button>
                 <button onclick="window.location.href='/export_analise'" title="Baixar Resultado em Excel">📊 Exportar
                     Excel</button>
@@ -259,11 +252,19 @@
             <div class="table-wrap">
                 <table id="resultsTable">
                     <thead>
-                        <tr>
-                            <th style="width:100px;">CÓDIGO</th>
-                            <th style="width:120px;">STATUS</th>
-                            <th style="width:150px; color:#4aa3ff;">FILIAL</th>
-                            <th class="right" style="color:#4aa3ff;">VALOR TESTE</th>
+                        <th style="width:100px;">CÓDIGO</th>
+                        <th style="width:120px;">STATUS</th>
+                        <th style="width:150px; color:#4aa3ff;">FILIAL</th>
+                        <th class="right" style="color:#4aa3ff;">
+                            VALOR TESTE
+                            <div id="totalValTeste"
+                                style="font-size:12px; color:#bae0ff; font-weight:normal; margin-top:2px;"></div>
+                        </th>
+                        <th class="right" style="color:#4aa3ff;">
+                            CUSTO MÉDIO
+                            <div id="totalCM"
+                                style="font-size:12px; color:#bae0ff; font-weight:normal; margin-top:2px;"></div>
+                        </th>
                         </tr>
                         <!-- Filter Row -->
                         <tr class="filter-row">
@@ -276,16 +277,28 @@
                                     <option value="NÃO EXISTE">Ausente</option>
                                 </select>
                             </th>
-                            <th><input type="text" class="filter-input" placeholder="Filtrar Filial..."
-                                    onkeyup="updateFilter('filial', this.value)"></th>
-                            <th><input type="text" class="filter-input right" placeholder="Filtrar Valor..."
-                                    onkeyup="updateFilter('val_teste', this.value)"></th>
+                            <th>
+                                <select id="selFilial" class="filter-input"
+                                    onchange="updateFilter('filial', this.value)">
+                                    <option value="">Todas</option>
+                                </select>
+                            </th>
+                            <th>
+                                <select id="selVal" class="filter-input"
+                                    onchange="updateFilter('val_teste', this.value)">
+                                    <option value="">Todos</option>
+                                </select>
+                            </th>
+                            <th>
+                                <select id="selCM" class="filter-input" onchange="updateFilter('cm', this.value)">
+                                    <option value="">Todos</option>
+                                </select>
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in data %}
-                        <tr class="result-row {% if item.has_diff %}row-diff{% endif %}"
-                            data-diff="{{ 'true' if item.has_diff else 'false' }}"
+                        <tr class="result-row" data-diff="{{ 'true' if item.has_diff else 'false' }}"
                             data-found="{{ 'true' if item.found else 'false' }}">
 
                             <td class="mono" style="font-weight:bold;">{{ item.cod }}</td>
@@ -304,8 +317,14 @@
                             <td class="right mono" style="color:#bae0ff;">
                                 {{ item.t_vatu | format_br }}
                             </td>
+
+                            <!-- CM -->
+                            <td class="right mono" style="color:#bae0ff;">
+                                {{ item.t_cm | format_br }}
+                            </td>
                         </tr>
                         {% endfor %}
+                    </tbody>
                     </tbody>
                 </table>
             </div>
@@ -313,12 +332,44 @@
     </div>
 
     <script>
+        // Populate Selects from table data
+        document.addEventListener('DOMContentLoaded', () => {
+            populateOptions(2, 'selFilial'); // Filial is index 2
+            populateOptions(3, 'selVal');    // Valor is index 3
+            populateOptions(4, 'selCM');     // CM is index 4
+            applyAllFilters(); // Init calculations
+        });
+
+        function populateOptions(colIndex, selectId) {
+            const select = document.getElementById(selectId);
+            const rows = document.querySelectorAll('.result-row');
+            const uniqueValues = new Set();
+
+            rows.forEach(row => {
+                const cells = row.getElementsByTagName('td');
+                if (cells[colIndex]) {
+                    const val = cells[colIndex].textContent.trim();
+                    if (val) uniqueValues.add(val);
+                }
+            });
+
+            const sorted = Array.from(uniqueValues).sort();
+
+            sorted.forEach(val => {
+                const opt = document.createElement('option');
+                opt.value = val;
+                opt.textContent = val;
+                select.appendChild(opt);
+            });
+        }
+
         // State of active filters
         const activeFilters = {
             global: 'all',
             cod: '',
             status: '',
             filial: '',
+            cm: '',
             val_teste: ''
         };
 
@@ -329,6 +380,8 @@
 
         function applyAllFilters() {
             const rows = document.querySelectorAll('.result-row');
+            let totalVal = 0.0;
+            let totalCM = 0.0;
 
             rows.forEach(row => {
                 // 1. Check Global Filter
@@ -341,29 +394,55 @@
                 else if (activeFilters.global === 'missing') passGlobal = !isFound;
 
                 // 2. Check Text Filters
-                // Get cell contents. Indices match the <td> order
-                // Order: 0: Cod, 1: Status, 2: Filial, 3: ValTeste
+                // Order: 0: Cod, 1: Status, 2: Filial, 3: ValTeste, 4: CM
                 const cells = row.getElementsByTagName('td');
 
-                if (cells.length < 4) return; // safety
+                if (cells.length < 5) return; // safety
 
                 const txtCod = cells[0].textContent.toLowerCase();
                 const txtStatus = cells[1].textContent.trim().toLowerCase();
                 const txtFilial = cells[2].textContent.toLowerCase();
                 const txtValTeste = cells[3].textContent.toLowerCase();
+                const txtCM = cells[4].textContent.toLowerCase();
 
                 const passCod = !activeFilters.cod || txtCod.includes(activeFilters.cod);
                 const passStatus = !activeFilters.status || txtStatus.includes(activeFilters.status);
                 const passFilial = !activeFilters.filial || txtFilial.includes(activeFilters.filial);
                 const passValTeste = !activeFilters.val_teste || txtValTeste.includes(activeFilters.val_teste);
+                const passCM = !activeFilters.cm || txtCM.includes(activeFilters.cm);
 
                 // Final Decision
-                if (passGlobal && passCod && passStatus && passFilial && passValTeste) {
+                if (passGlobal && passCod && passStatus && passFilial && passValTeste && passCM) {
                     row.style.display = '';
+
+                    // Add to total
+                    const valStr = cells[3].textContent.trim();
+                    // 1.500,00 -> 1500.00
+                    // Remove dots, repl comma with dot
+                    const cleanVal = parseFloat(valStr.replace(/\./g, '').replace(',', '.'));
+                    if (!isNaN(cleanVal)) {
+                        totalVal += cleanVal;
+                    }
+
+                    // Add to total CM
+                    const cmStr = cells[4].textContent.trim();
+                    const cleanCM = parseFloat(cmStr.replace(/\./g, '').replace(',', '.'));
+                    if (!isNaN(cleanCM)) {
+                        totalCM += cleanCM;
+                    }
                 } else {
                     row.style.display = 'none';
                 }
             });
+
+            // Update total display
+            const fmtTotal = totalVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const el = document.getElementById('totalValTeste');
+            if (el) el.textContent = fmtTotal;
+
+            const fmtTotalCM = totalCM.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const elCM = document.getElementById('totalCM');
+            if (elCM) elCM.textContent = fmtTotalCM;
         }
     </script>
 </body>

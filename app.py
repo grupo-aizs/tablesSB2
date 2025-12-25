@@ -595,6 +595,7 @@ def upload_analise():
             
             t_qatu = db_entry['qatu'] if found else 0.0
             t_vatu = db_entry['vatu'] if found else 0.0
+            t_cm = (t_vatu / t_qatu) if t_qatu > 0 else 0.0
             
             # Separa Filiais e Locais
             if found:
@@ -618,6 +619,7 @@ def upload_analise():
                 # Teste
                 't_qatu': t_qatu,
                 't_vatu': t_vatu,
+                't_cm': t_cm,
                 
                 # Importado
                 'i_qatu': i_qatu,
