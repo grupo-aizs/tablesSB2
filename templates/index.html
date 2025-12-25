@@ -347,15 +347,48 @@
 
 
         <!-- Export -->
+        <button onclick="window.location.href='/importar'" title="Importar Excel para Comparação">📥 Importar</button>
         <button onclick="exportExcel()" title="Baixar Excel Completo">📊 Excel</button>
 
-        <!-- Filter Filial -->
-        <select id="filialSelect" onchange="changeFilial(this.value)">
-          <option value="all" {% if current_filial=='all' %}selected{% endif %}>Todas Filiais</option>
-          {% for f in filiais_list %}
-          <option value="{{ f }}" {% if current_filial==f %}selected{% endif %}>{{ f }}</option>
-          {% endfor %}
-        </select>
+        <!-- Multi-Select Filial Dropdown -->
+        <div class="dropdown">
+          <button class="dropdown-toggle" onclick="toggleFilialMenu()">
+            <span>
+              🏢
+              {% if 'all' in selected_filiais %}
+              Todas Filiais
+              {% else %}
+              {{ selected_filiais|length }} Filiais
+              {% endif %}
+            </span>
+            <small>▼</small>
+          </button>
+          <div id="filialDropdownMenu" class="dropdown-menu">
+            <label class="dropdown-item">
+              <input type="checkbox" id="chk-all-filial" onchange="toggleAllFiliais(this)" {% if 'all' in
+                selected_filiais %}checked{% endif %}>
+              <b>Todas as Filiais</b>
+            </label>
+            <div style="height: 1px; background: rgba(255,255,255,0.1); margin: 6px 0;"></div>
+
+            <div style="max-height: 200px; overflow-y: auto;">
+              {% for f in filiais_list %}
+              <label class="dropdown-item">
+                <input type="checkbox" class="chk-filial" value="{{ f }}" onchange="checkManualFilial()" {% if f in
+                  selected_filiais and 'all' not in selected_filiais %}checked{% endif %}>
+                {{ f }}
+              </label>
+              {% endfor %}
+            </div>
+
+            <div class="dropdown-actions">
+              <button onclick="applyFilialFilter()"
+                style="width:100%; border:none; background: var(--apple-blue, #4aa3ff); color:#fff;">
+                Aplicar
+              </button>
+            </div>
+          </div>
+        </div>
 
         <!-- Filter Dropdown -->
         <!-- Filter Dropdown -->
@@ -404,7 +437,7 @@
             </div>
           </div>
         </div>
-        <div id="overlayGlobal" class="overlay-click" onclick="closeDateMenu()"></div>
+        <div id="overlayGlobal" class="overlay-click" onclick="closeAllMenus()"></div>
 
         <!-- Pagination -->
         <div class="pagination-ctrls">
@@ -567,20 +600,75 @@
     }
 
     // --- UI Logic para Custom Dropdown ---
+    function closeAllMenus() {
+      document.getElementById('yearDropdownMenu').classList.remove('show');
+      const fMenu = document.getElementById('filialDropdownMenu');
+      if (fMenu) fMenu.classList.remove('show');
+      document.getElementById('overlayGlobal').classList.remove('show');
+    }
+
     function toggleDateMenu() {
       const menu = document.getElementById('yearDropdownMenu');
       const ov = document.getElementById('overlayGlobal');
+
+      // Close others
+      const fMenu = document.getElementById('filialDropdownMenu');
+      if (fMenu) fMenu.classList.remove('show');
+
       if (menu.classList.contains('show')) {
-        closeDateMenu();
+        closeAllMenus();
       } else {
         menu.classList.add('show');
         ov.classList.add('show');
       }
     }
 
-    function closeDateMenu() {
+    function toggleFilialMenu() {
+      const menu = document.getElementById('filialDropdownMenu');
+      const ov = document.getElementById('overlayGlobal');
+
+      // Close others
       document.getElementById('yearDropdownMenu').classList.remove('show');
-      document.getElementById('overlayGlobal').classList.remove('show');
+
+      if (menu.classList.contains('show')) {
+        closeAllMenus();
+      } else {
+        menu.classList.add('show');
+        ov.classList.add('show');
+      }
+    }
+
+    function toggleAllFiliais(el) {
+      const checkboxes = document.querySelectorAll('.chk-filial');
+      checkboxes.forEach(chk => {
+        if (el.checked) chk.checked = false;
+      });
+    }
+
+    function checkManualFilial() {
+      const chkAll = document.getElementById('chk-all-filial');
+      const anyChecked = Array.from(document.querySelectorAll('.chk-filial')).some(c => c.checked);
+      if (anyChecked) {
+        chkAll.checked = false;
+      }
+    }
+
+    function applyFilialFilter() {
+      const chkAll = document.getElementById('chk-all-filial');
+      const checkboxes = document.querySelectorAll('.chk-filial');
+      let val = 'all';
+
+      if (!chkAll.checked) {
+        const selected = Array.from(checkboxes)
+          .filter(c => c.checked)
+          .map(c => c.value);
+        if (selected.length > 0) val = selected.join(',');
+      }
+
+      const params = getParams();
+      params.set('filial', val);
+      params.set('page', 1);
+      window.location.href = `/?${params.toString()}`;
     }
 
     function toggleAll(el) {

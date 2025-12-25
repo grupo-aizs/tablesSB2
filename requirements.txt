@@ -2,3 +2,4 @@ flask
 pyodbc
 openpyxl
 XlsxWriter
+pandas

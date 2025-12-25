@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Comparação Importação - Sync SB2010</title>
+    <style>
+        :root {
+            --bg: #0b1220;
+            --card: #111a2e;
+            --muted: #9fb0d0;
+            --text: #eaf0ff;
+            --line: rgba(255, 255, 255, .10);
+            --brand: #4aa3ff;
+            --ok: #2de38b;
+            --warn: #ffcc66;
+            --danger: #ff4d4d;
+        }
+
+        body {
+            margin: 0;
+            font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+            background: radial-gradient(1200px 600px at 20% 0%, rgba(74, 163, 255, .18), transparent 60%),
+                radial-gradient(1000px 500px at 90% 20%, rgba(45, 227, 139, .12), transparent 60%),
+                var(--bg);
+            color: var(--text);
+        }
+
+        .wrap {
+            max-width: 98%;
+            margin: 22px auto;
+            padding: 0 14px;
+        }
+
+        .topbar {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            justify-content: space-between;
+            background: linear-gradient(180deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .03));
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, .35);
+            position: sticky;
+            top: 10px;
+            z-index: 20;
+            backdrop-filter: blur(10px);
+        }
+
+        .title h1 {
+            margin: 0;
+            font-size: 18px;
+            letter-spacing: .2px;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .badges {
+            margin-top: 4px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255, 255, 255, .06);
+            border: 1px solid var(--line);
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            color: var(--text);
+        }
+
+        button {
+            padding: 6px 12px;
+            border: 1px solid rgba(255, 255, 255, .16);
+            background: linear-gradient(180deg, rgba(74, 163, 255, .35), rgba(74, 163, 255, .18));
+            color: var(--text);
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+        }
+
+        button:hover {
+            background: rgba(74, 163, 255, .4);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border-color: var(--line);
+            color: var(--muted);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+        }
+
+        select {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--line);
+            color: var(--text);
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-family: inherit;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .table-card {
+            margin-top: 14px;
+            background: rgba(255, 255, 255, .04);
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, .35);
+        }
+
+        .table-wrap {
+            max-height: 75vh;
+            overflow: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        thead th {
+            position: sticky;
+            top: 0;
+            background: #111a2e;
+            z-index: 10;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            border-bottom: 1px solid var(--line);
+            text-align: left;
+            padding: 12px 10px;
+            color: var(--text);
+            font-weight: 800;
+            letter-spacing: .3px;
+        }
+
+        /* Dual Header Support */
+        thead tr:nth-child(1) th {
+            top: 0;
+        }
+
+        thead tr:nth-child(2) th {
+            top: 41px;
+            background: #162035;
+            font-size: 12px;
+        }
+
+        thead tr:nth-child(3) th {
+            top: 79px;
+            background: #162035;
+            font-size: 12px;
+            border-bottom: 2px solid var(--line);
+        }
+
+        tbody td {
+            padding: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, .06);
+            color: rgba(234, 240, 255, .92);
+        }
+
+        tbody tr:nth-child(odd) {
+            background: rgba(255, 255, 255, .02);
+        }
+
+        tbody tr:hover {
+            background: rgba(74, 163, 255, .10);
+        }
+
+        .right {
+            text-align: right;
+        }
+
+        .center {
+            text-align: center;
+        }
+
+        .mono {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+
+        /* Diffs */
+        .diff {
+            color: #ff4d4d !important;
+            font-weight: 800;
+            text-shadow: 0 0 10px rgba(255, 77, 77, 0.4);
+        }
+
+        .match {
+            color: #2de38b;
+            opacity: 0.6;
+        }
+
+        .row-diff {
+            background: rgba(255, 77, 77, 0.15) !important;
+            border-left: 3px solid #ff4d4d;
+        }
+
+        .status-found {
+            color: var(--ok);
+            font-weight: bold;
+            font-size: 11px;
+        }
+
+        .status-missing {
+            color: var(--danger);
+            font-weight: bold;
+            font-size: 11px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="wrap">
+        <div class="topbar">
+            <div class="title">
+                <h1>Resultado da Análise</h1>
+                <div class="subtitle">Base Teste (SB2010) x Base Importada (Excel)</div>
+                <div class="badges">
+                    <span class="badge">Total Itens: {{ data|length }}</span>
+                </div>
+            </div>
+
+            <div style="display:flex; gap:10px; align-items:center;">
+
+                <select id="filterStatus" onchange="applyFilter()">
+                    <option value="all">Mostrar Tudo</option>
+                    <option value="diff">⚠️ Com Divergência</option>
+                    <option value="ok">✅ Iguais</option>
+                    <option value="missing">❌ Produto Não Cadastrado</option>
+                </select>
+
+                <button class="btn-secondary" onclick="window.location.href='/importar'">Nova Importação</button>
+                <button onclick="window.location.href='/'">Voltar ao Início</button>
+            </div>
+        </div>
+
+        <div class="table-card">
+            <div class="table-wrap">
+                <table id="resultsTable">
+                    <thead>
+
+                        <!-- Grupo Headers -->
+                        <tr>
+                            <th rowspan="2" style="width:100px;">CÓDIGO</th>
+                            <th rowspan="2" style="width:200px;">DESCRIÇÃO / OBS</th>
+                            <th rowspan="2" style="width:80px;">STATUS</th>
+
+                            <!-- Grupo Teste -->
+                            <th colspan="3" style="text-align:center; border-left:1px solid #4aa3ff; color:#4aa3ff;">
+                                BASE TESTE (SQL)
+                            </th>
+
+                            <!-- Grupo Importado -->
+                            <th colspan="2" style="text-align:center; border-left:1px solid #ffcc66; color:#ffcc66;">
+                                IMPORTADO (EXCEL)
+                            </th>
+                        </tr>
+
+                        <!-- Sub Headers -->
+                        <tr>
+                            <!-- Teste Cols -->
+                            <th class="right" style="border-left:1px solid rgba(74,163,255,.3);">Qtd Total</th>
+                            <th class="right">Valor Total</th>
+                            <th style="font-size:11px; color:var(--muted); min-width:150px;">Locais Armaz.</th>
+
+                            <!-- Importado Cols -->
+                            <th class="right" style="border-left:1px solid rgba(255,204,102,.3);">Quantidade</th>
+                            <th class="right">Valor</th>
+                        </tr>
+
+                        <!-- Totais Row -->
+                        <tr>
+                            <th colspan="3" class="right" style="text-align:right; font-style:italic; opacity:0.8;">
+                                TOTAIS GERAIS:
+                            </th>
+
+                            <!-- Total Teste -->
+                            <th class="right" style="color:#bae0ff; border-left:1px solid rgba(74,163,255,.1);">
+                                {{ totals.t_qatu | format_br }}
+                            </th>
+                            <th class="right" style="color:#bae0ff;">
+                                {{ totals.t_vatu | format_br }}
+                            </th>
+                            <th></th>
+
+                            <!-- Total Importado -->
+                            <th class="right" style="color:#2de38b; border-left:1px solid rgba(255,204,102,.1);">
+                                {{ totals.i_qatu | format_br }}
+                            </th>
+                            <th class="right" style="color:#2de38b;">
+                                {{ totals.i_vatu | format_br }}
+                            </th>
+                        </tr>
+
+                    </thead>
+                    <tbody>
+                        {% for item in data %}
+                        <tr class="result-row {% if item.has_diff %}row-diff{% endif %}"
+                            data-diff="{{ 'true' if item.has_diff else 'false' }}"
+                            data-found="{{ 'true' if item.found else 'false' }}">
+
+                            <td class="mono" style="font-weight:bold;">{{ item.cod }}</td>
+                            <td style="font-size:12px; color:rgba(255,255,255,0.7);">{{ item.desc }}</td>
+                            <td>
+                                {% if item.found %}
+                                <span class="status-found">CADASTRO OK</span>
+                                {% else %}
+                                <span class="status-missing">NÃO EXISTE</span>
+                                {% endif %}
+                            </td>
+
+                            <!-- Teste Values -->
+                            <td class="right mono" style="border-left:1px solid rgba(74,163,255,.1); color:#bae0ff;">
+                                {{ item.t_qatu | format_br }}
+                            </td>
+                            <td class="right mono" style="color:#bae0ff;">
+                                {{ item.t_vatu | format_br }}
+                            </td>
+                            <td style="font-size:10px; color:rgba(255,255,255,0.4); max-width:150px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;"
+                                title="{{ item.details }}">
+                                {{ item.details }}
+                            </td>
+
+                            <!-- Import Values -->
+                            <td class="right mono {% if item.diff_qatu %}diff{% else %}match{% endif %}"
+                                style="border-left:1px solid rgba(255,204,102,.1);">
+                                {{ item.i_qatu | format_br }}
+                            </td>
+                            <td class="right mono {% if item.diff_vatu %}diff{% else %}match{% endif %}">
+                                {{ item.i_vatu | format_br }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function applyFilter() {
+            const val = document.getElementById('filterStatus').value;
+            const rows = document.querySelectorAll('.result-row');
+
+            rows.forEach(row => {
+                const isDiff = row.getAttribute('data-diff') === 'true';
+                const isFound = row.getAttribute('data-found') === 'true';
+
+                let show = true;
+
+                if (val === 'diff') {
+                    show = isDiff;
+                } else if (val === 'ok') {
+                    show = !isDiff;
+                } else if (val === 'missing') {
+                    show = !isFound;
+                }
+
+                row.style.display = show ? '' : 'none';
+            });
+        }
+    </script>
+</body>
+
+</html>

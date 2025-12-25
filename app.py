@@ -5,12 +5,13 @@ import os
 import io
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
-from flask import send_file
+from flask import send_file, request, redirect, url_for
+import pandas as pd
 
 app = Flask(__name__)
 
 # Lista de filiais a considerar
-FILIAIS = ["09ALFA01", "09ALFA07"]
+FILIAIS = ["09ALFA01", "09ALFA07", "09ALFA02", "09ALFA06", "09ALFA03"]
 # String para display (ou log)
 FILIAIS_STR = ", ".join(FILIAIS)
 
@@ -231,7 +232,8 @@ def get_cached_data(force_reload=False):
 def apply_filter(data, filter_type, filter_year, filter_filial):
     # 0. Filtro de Filial
     if filter_filial != 'all':
-        data = [item for item in data if item['filial'] == filter_filial]
+        target_filiais = filter_filial.split(',')
+        data = [item for item in data if item['filial'] in target_filiais]
 
     # 1. Filtro de Ano (Year) prioritiário
     # Se filter_year != 'all', só mantemos itens onde pelo menos um dos DMOVs começa com aquele ano
@@ -307,6 +309,7 @@ def index():
 
     # Prepara lista de anos selecionados para o template marcar
     selected_years = filter_year.split(',')
+    selected_filiais = filter_filial.split(',')
 
     return render_template(
         "index.html",
@@ -327,6 +330,7 @@ def index():
         current_year=filter_year,
         current_filial=filter_filial,
         selected_years=selected_years,
+        selected_filiais=selected_filiais,
         available_years=sorted_years
     )
 
@@ -484,6 +488,7 @@ def export_excel():
     worksheet.write(last_row, 10, "", total_fmt)
 
     # 6. Fechar e Enviar
+    # 6. Fechar e Enviar
     workbook.close()
     output.seek(0)
     
@@ -496,6 +501,142 @@ def export_excel():
         as_attachment=True,
         download_name=filename
     )
+
+@app.route("/importar")
+def importar():
+    return render_template("importar.html")
+
+@app.route("/upload_analise", methods=["POST"])
+def upload_analise():
+    file = request.files.get('file')
+    if not file:
+        return "Nenhum arquivo enviado", 400
+    
+    # Check extension
+    if not (file.filename.endswith('.xls') or file.filename.endswith('.xlsx')):
+        return "Formato inválido. Use .xls ou .xlsx", 400
+
+    try:
+        # Ler Excel com Pandas
+        df = pd.read_excel(file, decimal=',', thousands='.')
+        
+        # Limpar nomes de colunas (strip e lower para busca)
+        df.columns = [str(c).strip() for c in df.columns]
+        cols_lower = {c.lower(): c for c in df.columns}
+        
+        # 1. Detectar Coluna de CÓDIGO
+        col_codigo = None
+        for c in df.columns:
+            if 'código' in c.lower() or 'codigo' in c.lower() or 'produto' in c.lower():
+                col_codigo = c
+                break
+        
+        # Fallback: coluna F (index 5) normal
+        if not col_codigo and len(df.columns) > 5:
+            col_codigo = df.columns[5]
+            
+        if not col_codigo:
+             return "Não foi possível identificar a coluna de 'Código' ou 'Produto'.", 400
+
+        # 2. Detectar Coluna de QUANTIDADE
+        col_qty = None
+        for c in df.columns:
+            if 'quant' in c.lower() or 'qtd' in c.lower() or 'saldo' in c.lower():
+                col_qty = c
+                break
+        
+        # 3. Detectar Coluna de VALOR
+        col_val = None
+        for c in df.columns:
+            # Evita "Unitário" se tiver "TOTAL" ou "VALOR"
+            if 'valor' in c.lower() or 'total' in c.lower() or ('custo' in c.lower() and 'unit' not in c.lower()):
+                col_val = c
+                break
+        # Se não achou 'Valor' ou 'Total', tenta Custo Unitário * Qtd depois? Não, melhor tentar só 'VALOR' como na imagem
+        if not col_val and 'valor' in cols_lower:
+            col_val = cols_lower['valor']
+
+        # Carregar dados da Base Teste
+        test_data_raw = get_produtos_teste()
+        
+        # Agrupar dados de Teste em Dict: Código -> {qatu: sum, vatu: sum, details: str}
+        # Nota: Comparar linha a linha do excel com o TOTAL do código na base.
+        test_db_map = {}
+        for r in test_data_raw:
+            # r = (filial, cod, local, vatu1, cm1, qatu, dmov)
+            c_key = r[1].strip()
+            if c_key not in test_db_map:
+                test_db_map[c_key] = {'qatu': 0.0, 'vatu': 0.0, 'locais': []}
+            
+            test_db_map[c_key]['qatu'] += float(r[5] or 0)
+            test_db_map[c_key]['vatu'] += float(r[3] or 0)
+            test_db_map[c_key]['locais'].append(f"{r[0]}-{r[2]}")
+            
+        # Processar Lista Final
+        results = []
+        
+        for idx, row in df.iterrows():
+            code_val = str(row[col_codigo]).strip()
+            
+            # Dados do Excel (Importado)
+            try:
+                i_qatu = float(row[col_qty]) if col_qty else 0.0
+            except: i_qatu = 0.0
+            
+            try:
+                i_vatu = float(row[col_val]) if col_val else 0.0
+            except: i_vatu = 0.0
+            
+            # Dados do Banco (Teste)
+            db_entry = test_db_map.get(code_val)
+            found = db_entry is not None
+            
+            t_qatu = db_entry['qatu'] if found else 0.0
+            t_vatu = db_entry['vatu'] if found else 0.0
+            details = "; ".join(db_entry['locais']) if found else ""
+            
+            # Diffs (com tolerância pequena)
+            diff_qatu = abs(t_qatu - i_qatu) > 0.01
+            diff_vatu = abs(t_vatu - i_vatu) > 0.01
+            has_diff = diff_qatu or diff_vatu
+            
+            results.append({
+                'cod': code_val,
+                'desc': row.get('Descrição', row.get('Descr', '')), # Tenta pegar descrição se tiver
+                'details': details,
+                
+                # Teste
+                't_qatu': t_qatu,
+                't_vatu': t_vatu,
+                
+                # Importado
+                'i_qatu': i_qatu,
+                'i_vatu': i_vatu,
+                
+                # Flags
+                'found': found,
+                'diff_qatu': diff_qatu,
+                'diff_vatu': diff_vatu,
+                'has_diff': has_diff,
+                
+                # Raw row for debugging or extra cols if needed (not sending all to keep light)
+            })
+            
+        return render_template(
+            "importar_resultado.html",
+            data=results,
+            totals={
+                't_qatu': sum(r['t_qatu'] for r in results),
+                't_vatu': sum(r['t_vatu'] for r in results),
+                'i_qatu': sum(r['i_qatu'] for r in results),
+                'i_vatu': sum(r['i_vatu'] for r in results),
+            }
+        )
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"Erro ao processar arquivo: {str(e)}", 500
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=9901)
