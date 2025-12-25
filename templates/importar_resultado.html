@@ -147,24 +147,6 @@
             letter-spacing: .3px;
         }
 
-        /* Dual Header Support */
-        thead tr:nth-child(1) th {
-            top: 0;
-        }
-
-        thead tr:nth-child(2) th {
-            top: 41px;
-            background: #162035;
-            font-size: 12px;
-        }
-
-        thead tr:nth-child(3) th {
-            top: 79px;
-            background: #162035;
-            font-size: 12px;
-            border-bottom: 2px solid var(--line);
-        }
-
         tbody td {
             padding: 10px;
             border-bottom: 1px solid rgba(255, 255, 255, .06);
@@ -219,6 +201,29 @@
             font-weight: bold;
             font-size: 11px;
         }
+
+        .filter-input {
+            width: 100%;
+            box-sizing: border-box;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--line);
+            color: var(--text);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            outline: none;
+        }
+
+        .filter-input:focus {
+            border-color: var(--brand);
+            background: rgba(0, 0, 0, 0.4);
+        }
+
+        thead tr.filter-row th {
+            background: #162035;
+            padding: 6px;
+            border-bottom: 2px solid var(--line);
+        }
     </style>
 </head>
 
@@ -236,7 +241,7 @@
 
             <div style="display:flex; gap:10px; align-items:center;">
 
-                <select id="filterStatus" onchange="applyFilter()">
+                <select id="filterStatus" onchange="updateFilter('global', this.value)">
                     <option value="all">Mostrar Tudo</option>
                     <option value="diff">⚠️ Com Divergência</option>
                     <option value="ok">✅ Iguais</option>
@@ -268,6 +273,29 @@
                             <!-- Imports -->
                             <th class="right" style="color:#ffcc66;">QTD EXCEL</th>
                             <th class="right" style="color:#ffcc66;">VALOR EXCEL</th>
+                        </tr>
+                        <!-- Filter Row -->
+                        <tr class="filter-row">
+                            <th><input type="text" class="filter-input" placeholder="Filtrar Código..."
+                                    onkeyup="updateFilter('cod', this.value)"></th>
+                            <th><input type="text" class="filter-input" placeholder="Filtrar Desc..."
+                                    onkeyup="updateFilter('desc', this.value)"></th>
+                            <th>
+                                <select class="filter-input" onchange="updateFilter('status', this.value)">
+                                    <option value="">Todos</option>
+                                    <option value="CADASTRO OK">OK</option>
+                                    <option value="NÃO EXISTE">Ausente</option>
+                                </select>
+                            </th>
+                            <th><input type="text" class="filter-input" placeholder="Filtrar Filial..."
+                                    onkeyup="updateFilter('filial', this.value)"></th>
+                            <th><input type="text" class="filter-input" placeholder="Filtrar Local..."
+                                    onkeyup="updateFilter('local', this.value)"></th>
+                            <th></th> <!-- Qtd Teste -->
+                            <th><input type="text" class="filter-input right" placeholder="Filtrar Valor..."
+                                    onkeyup="updateFilter('val_teste', this.value)"></th>
+                            <th></th> <!-- Qtd Excel -->
+                            <th></th> <!-- Valor Excel -->
                         </tr>
                     </thead>
                     <tbody>
@@ -314,25 +342,60 @@
     </div>
 
     <script>
-        function applyFilter() {
-            const val = document.getElementById('filterStatus').value;
+        // State of active filters
+        const activeFilters = {
+            global: 'all',
+            cod: '',
+            desc: '',
+            status: '',
+            filial: '',
+            local: '',
+            val_teste: ''
+        };
+
+        function updateFilter(key, val) {
+            activeFilters[key] = val.toLowerCase();
+            applyAllFilters();
+        }
+
+        function applyAllFilters() {
             const rows = document.querySelectorAll('.result-row');
 
             rows.forEach(row => {
+                // 1. Check Global Filter
                 const isDiff = row.getAttribute('data-diff') === 'true';
                 const isFound = row.getAttribute('data-found') === 'true';
 
-                let show = true;
+                let passGlobal = true;
+                if (activeFilters.global === 'diff') passGlobal = isDiff;
+                else if (activeFilters.global === 'ok') passGlobal = !isDiff;
+                else if (activeFilters.global === 'missing') passGlobal = !isFound;
 
-                if (val === 'diff') {
-                    show = isDiff;
-                } else if (val === 'ok') {
-                    show = !isDiff;
-                } else if (val === 'missing') {
-                    show = !isFound;
+                // 2. Check Text Filters
+                // Get cell contents. Indices match the <td> order
+                const cells = row.getElementsByTagName('td');
+                // 0: Cod, 1: Desc, 2: Status, 3: Filial, 4: Local, 5: QtdT, 6: ValT
+
+                const txtCod = cells[0].textContent.toLowerCase();
+                const txtDesc = cells[1].textContent.toLowerCase();
+                const txtStatus = cells[2].textContent.trim().toLowerCase(); // span inside
+                const txtFilial = cells[3].textContent.toLowerCase();
+                const txtLocal = cells[4].textContent.toLowerCase();
+                const txtValTeste = cells[6].textContent.toLowerCase();
+
+                const passCod = !activeFilters.cod || txtCod.includes(activeFilters.cod);
+                const passDesc = !activeFilters.desc || txtDesc.includes(activeFilters.desc);
+                const passStatus = !activeFilters.status || txtStatus.includes(activeFilters.status);
+                const passFilial = !activeFilters.filial || txtFilial.includes(activeFilters.filial);
+                const passLocal = !activeFilters.local || txtLocal.includes(activeFilters.local);
+                const passValTeste = !activeFilters.val_teste || txtValTeste.includes(activeFilters.val_teste);
+
+                // Final Decision
+                if (passGlobal && passCod && passDesc && passStatus && passFilial && passLocal && passValTeste) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
                 }
-
-                row.style.display = show ? '' : 'none';
             });
         }
     </script>
