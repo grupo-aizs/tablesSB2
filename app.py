@@ -157,6 +157,8 @@ import time
 # Cache Global simples
 CACHE_DATA = None
 CACHE_TIMESTAMP = None
+# Cache para Exportação da Análise de Importação
+LATEST_IMPORT_DATA = []
 
 def get_cached_data(force_reload=False):
     global CACHE_DATA, CACHE_TIMESTAMP
@@ -622,6 +624,10 @@ def upload_analise():
                 # Raw row for debugging or extra cols if needed (not sending all to keep light)
             })
             
+        # Salva no cache global para exportação
+        global LATEST_IMPORT_DATA
+        LATEST_IMPORT_DATA = results
+
         return render_template(
             "importar_resultado.html",
             data=results,
@@ -637,6 +643,69 @@ def upload_analise():
         import traceback
         traceback.print_exc()
         return f"Erro ao processar arquivo: {str(e)}", 500
+
+@app.route("/export_analise")
+def export_analise():
+    global LATEST_IMPORT_DATA
+    if not LATEST_IMPORT_DATA:
+        return "Nenhum dado disponível para exportação. Realize uma importação primeiro.", 400
+
+    output = io.BytesIO()
+    workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+    worksheet = workbook.add_worksheet("Resultado Analise")
+
+    # Formatos
+    header_fmt = workbook.add_format({'bold': True, 'font_color': '#FFFFFF', 'bg_color': '#0B1220', 'align': 'center'})
+    normal_fmt = workbook.add_format({'num_format': '#,##0.00'})
+    diff_fmt = workbook.add_format({'bold': True, 'font_color': '#FF0000', 'num_format': '#,##0.00'})
+    text_fmt = workbook.add_format({})
+
+    # Cabeçalhos
+    headers = [
+        "CÓDIGO", "DESCRIÇÃO", "STATUS", 
+        "QTD TESTE", "VALOR TESTE", "LOCAIS TESTE",
+        "QTD IMPORTADA", "VALOR IMPORTADO"
+    ]
+    for col, h in enumerate(headers):
+        worksheet.write(0, col, h, header_fmt)
+
+    # Ajuste colunas
+    worksheet.set_column(0, 0, 15) # Cod
+    worksheet.set_column(1, 1, 35) # Desc
+    worksheet.set_column(2, 2, 15) # Status
+    worksheet.set_column(3, 7, 15) # Vals
+
+    # Dados
+    for i, item in enumerate(LATEST_IMPORT_DATA, start=1):
+        worksheet.write(i, 0, item['cod'], text_fmt)
+        worksheet.write(i, 1, item.get('desc', ''), text_fmt)
+        
+        status = "CADASTRO OK" if item['found'] else "NÃO EXISTE"
+        worksheet.write(i, 2, status, text_fmt)
+        
+        # Teste
+        worksheet.write(i, 3, item['t_qatu'], normal_fmt)
+        worksheet.write(i, 4, item['t_vatu'], normal_fmt)
+        worksheet.write(i, 5, item['details'], text_fmt)
+        
+        # Importado (Destaca Diff)
+        fmt_qatu = diff_fmt if item['diff_qatu'] else normal_fmt
+        fmt_vatu = diff_fmt if item['diff_vatu'] else normal_fmt
+        
+        worksheet.write(i, 6, item['i_qatu'], fmt_qatu)
+        worksheet.write(i, 7, item['i_vatu'], fmt_vatu)
+
+    workbook.close()
+    output.seek(0)
+    
+    filename = f"resultado_analise_{time.strftime('%Y%m%d_%H%M')}.xlsx"
+
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename
+    )
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=9901)
